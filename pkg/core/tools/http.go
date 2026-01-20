@@ -41,8 +41,38 @@ type HTTPResponse struct {
 	Duration   time.Duration     `json:"duration"`
 }
 
-// Execute performs an HTTP request
-func (t *HTTPTool) Execute(req HTTPRequest) (*HTTPResponse, error) {
+// Name returns the tool name
+func (t *HTTPTool) Name() string {
+	return "http_request"
+}
+
+// Description returns the tool description
+func (t *HTTPTool) Description() string {
+	return "Make HTTP requests to test API endpoints"
+}
+
+// Parameters returns the tool parameter description
+func (t *HTTPTool) Parameters() string {
+	return `{"method": "GET|POST|PUT|DELETE", "url": "string", "headers": {"key": "value"}, "body": {}}`
+}
+
+// Execute performs an HTTP request (implements core.Tool)
+func (t *HTTPTool) Execute(args string) (string, error) {
+	var req HTTPRequest
+	if err := json.Unmarshal([]byte(args), &req); err != nil {
+		return "", fmt.Errorf("failed to parse arguments: %w", err)
+	}
+
+	resp, err := t.Run(req)
+	if err != nil {
+		return "", err
+	}
+
+	return resp.FormatResponse(), nil
+}
+
+// Run performs an HTTP request
+func (t *HTTPTool) Run(req HTTPRequest) (*HTTPResponse, error) {
 	startTime := time.Now()
 
 	// Prepare request body

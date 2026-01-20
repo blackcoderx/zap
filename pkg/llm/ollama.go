@@ -34,14 +34,16 @@ type ChatResponse struct {
 type OllamaClient struct {
 	BaseURL    string
 	Model      string
+	APIKey     string
 	HTTPClient *http.Client
 }
 
 // NewOllamaClient creates a new Ollama client
-func NewOllamaClient(baseURL, model string) *OllamaClient {
+func NewOllamaClient(baseURL, model, apiKey string) *OllamaClient {
 	return &OllamaClient{
 		BaseURL: baseURL,
 		Model:   model,
+		APIKey:  apiKey,
 		HTTPClient: &http.Client{
 			Timeout: 60 * time.Second,
 		},
@@ -53,7 +55,7 @@ func (c *OllamaClient) Chat(messages []Message) (string, error) {
 	req := ChatRequest{
 		Model:    c.Model,
 		Messages: messages,
-		Stream:   false, // For simplicity, we'll start without streaming
+		Stream:   false,
 	}
 
 	jsonData, err := json.Marshal(req)
@@ -68,6 +70,12 @@ func (c *OllamaClient) Chat(messages []Message) (string, error) {
 	}
 
 	httpReq.Header.Set("Content-Type", "application/json")
+	if c.APIKey != "" {
+		httpReq.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.APIKey))
+		fmt.Printf("DEBUG: Sending request to %s with API Key (len: %d) and model: %s\n", url, len(c.APIKey), c.Model)
+	} else {
+		fmt.Printf("DEBUG: Sending request to %s WITHOUT API Key and model: %s\n", url, c.Model)
+	}
 
 	resp, err := c.HTTPClient.Do(httpReq)
 	if err != nil {
@@ -77,7 +85,7 @@ func (c *OllamaClient) Chat(messages []Message) (string, error) {
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return "", fmt.Errorf("ollama returned status %d: %s", resp.StatusCode, string(body))
+		return "", fmt.Errorf("ollama (url: %s, model: %s) returned status %d: %s", url, c.Model, resp.StatusCode, string(body))
 	}
 
 	var chatResp ChatResponse

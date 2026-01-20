@@ -12,6 +12,7 @@ const ZapFolderName = ".zap"
 // Config represents the user's ZAP configuration
 type Config struct {
 	OllamaURL    string `json:"ollama_url"`
+	OllamaAPIKey string `json:"ollama_api_key"`
 	DefaultModel string `json:"default_model"`
 	Theme        string `json:"theme"`
 }
@@ -51,7 +52,8 @@ func InitializeZapFolder() error {
 // createDefaultConfig creates a default configuration file
 func createDefaultConfig() error {
 	config := Config{
-		OllamaURL:    "http://localhost:11434",
+		OllamaURL:    "https://ollama.com",
+		OllamaAPIKey: "", // To be filled by user
 		DefaultModel: "llama3",
 		Theme:        "dark",
 	}

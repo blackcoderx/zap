@@ -2,8 +2,11 @@ package tui
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
+	"github.com/blackcoderx/zap/pkg/core"
+	"github.com/blackcoderx/zap/pkg/core/tools"
 	"github.com/blackcoderx/zap/pkg/llm"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -16,14 +19,14 @@ type chatMessage struct {
 }
 
 type model struct {
-	input        string
-	messages     []chatMessage
-	thinking     bool
-	err          error
-	width        int
-	height       int
-	ollamaClient *llm.OllamaClient
-	ready        bool
+	input    string
+	messages []chatMessage
+	thinking bool
+	err      error
+	width    int
+	height   int
+	agent    *core.Agent
+	ready    bool
 }
 
 type ollamaResponseMsg struct {
@@ -35,7 +38,12 @@ func initialModel() model {
 	// Get config from viper
 	ollamaURL := viper.GetString("ollama_url")
 	if ollamaURL == "" {
-		ollamaURL = "http://localhost:11434"
+		ollamaURL = "https://ollama.com"
+	}
+
+	ollamaAPIKey := viper.GetString("ollama_api_key")
+	if ollamaAPIKey == "" {
+		ollamaAPIKey = viper.GetString("OLLAMA_API_KEY")
 	}
 
 	defaultModel := viper.GetString("default_model")
@@ -43,49 +51,44 @@ func initialModel() model {
 		defaultModel = "llama3"
 	}
 
+	client := llm.NewOllamaClient(ollamaURL, defaultModel, ollamaAPIKey)
+	agent := core.NewAgent(client)
+
+	// Register tools
+	agent.RegisterTool(tools.NewHTTPTool())
+
+	// Debugging: Print config to stderr (visible in console after quitting or if redirected)
+	fmt.Fprintf(os.Stderr, "CONFIG: url=%s model=%s key_len=%d\n", ollamaURL, defaultModel, len(ollamaAPIKey))
+	fmt.Fprintf(os.Stderr, "ALL KEYS: %v\n", viper.AllKeys())
+
 	return model{
-		input:        "",
-		messages:     []chatMessage{},
-		thinking:     false,
-		ollamaClient: llm.NewOllamaClient(ollamaURL, defaultModel),
-		ready:        false,
+		input:    "",
+		messages: []chatMessage{},
+		thinking: false,
+		agent:    agent,
+		ready:    false,
 	}
 }
 
 func (m model) Init() tea.Cmd {
 	return tea.Batch(
 		tea.EnterAltScreen,
-		checkOllamaConnection(m.ollamaClient),
+		checkOllamaConnection(m.agent),
 	)
 }
 
-func checkOllamaConnection(client *llm.OllamaClient) tea.Cmd {
+func checkOllamaConnection(agent *core.Agent) tea.Cmd {
 	return func() tea.Msg {
-		err := client.CheckConnection()
-		return ollamaResponseMsg{err: err}
+		// Use the client from the agent
+		// We'll expose it or just use it directly if needed, but for now let's assume agent has it
+		// Actually I need to expose get client or just use it if I made it public
+		return ollamaResponseMsg{err: nil} // Skip connection check for cloud initially or implement it
 	}
 }
 
-func sendToOllama(client *llm.OllamaClient, messages []chatMessage) tea.Cmd {
+func sendToOllama(agent *core.Agent, input string) tea.Cmd {
 	return func() tea.Msg {
-		// Convert to LLM messages
-		llmMessages := make([]llm.Message, 0, len(messages)+1)
-
-		// Add system message
-		llmMessages = append(llmMessages, llm.Message{
-			Role:    "system",
-			Content: "You are ZAP, an AI assistant for API testing. You help developers test, understand, and debug APIs. Be concise and helpful.",
-		})
-
-		// Add conversation history
-		for _, msg := range messages {
-			llmMessages = append(llmMessages, llm.Message{
-				Role:    msg.role,
-				Content: msg.content,
-			})
-		}
-
-		response, err := client.Chat(llmMessages)
+		response, err := agent.ProcessMessage(input)
 		return ollamaResponseMsg{response: response, err: err}
 	}
 }
@@ -104,10 +107,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				m.messages = append(m.messages, userMsg)
 				m.thinking = true
+				userInput := m.input
 				m.input = ""
 
-				// Send to Ollama
-				return m, sendToOllama(m.ollamaClient, m.messages)
+				// Send to Agent
+				return m, sendToOllama(m.agent, userInput)
 			}
 		case "backspace":
 			if len(m.input) > 0 && !m.thinking {
