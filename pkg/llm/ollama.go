@@ -72,9 +72,6 @@ func (c *OllamaClient) Chat(messages []Message) (string, error) {
 	httpReq.Header.Set("Content-Type", "application/json")
 	if c.APIKey != "" {
 		httpReq.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.APIKey))
-		fmt.Printf("DEBUG: Sending request to %s with API Key (len: %d) and model: %s\n", url, len(c.APIKey), c.Model)
-	} else {
-		fmt.Printf("DEBUG: Sending request to %s WITHOUT API Key and model: %s\n", url, c.Model)
 	}
 
 	resp, err := c.HTTPClient.Do(httpReq)

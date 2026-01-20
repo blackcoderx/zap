@@ -1,168 +1,147 @@
-# Development Guide
+# ZAP Development Guide
 
-## Current Status
+## Project Status: PHASE 1.5 - TUI REDESIGN COMPLETE
 
-✅ **Phase 1 Foundation Complete**
+The TUI has been redesigned from a colorful chat interface to a minimal, log-centric design inspired by Claude Code. Core agent functionality remains solid.
 
-We have successfully scaffolded the ZAP project with:
-- Modern Go project structure
-- Cobra CLI framework
-- Beautiful TUI with Charm ecosystem
-- `.zap` folder auto-initialization
-- Working build system
-
-## Running ZAP
-
-### Build
-```bash
-go build -o zap.exe ./cmd/zap
-```
-
-### Run
-```bash
-./zap
-```
-
-On first run, ZAP will create `.zap/` folder with:
-- `config.json` - Configuration
-- `history.jsonl` - Conversation log
-- `memory.json` - Agent memory
-
-## Project Structure
-
+### Current Structure
 ```
 zap/
-├── cmd/zap/
-│   └── main.go              # Entry point, Cobra setup
+├── cmd/zap/main.go           # Entry point with Cobra/Viper/Env
 ├── pkg/
 │   ├── core/
-│   │   ├── init.go          # .zap initialization
-│   │   ├── agent.go         # [TODO] ReAct loop
-│   │   ├── context.go       # [TODO] Context manager
+│   │   ├── init.go           # .zap folder initialization
+│   │   ├── agent.go          # ReAct Agent + Event System
 │   │   └── tools/
-│   │       ├── http.go      # [TODO] HTTP client tool
-│   │       ├── filesystem.go # [TODO] File reading
-│   │       ├── search.go    # [TODO] Code search
-│   │       └── env.go       # [TODO] Environment secrets
+│   │       └── http.go       # HTTP Tool (implements core.Tool)
 │   ├── llm/
-│   │   └── ollama.go        # [TODO] Ollama client
+│   │   └── ollama.go         # Ollama Cloud client (Bearer auth)
 │   └── tui/
-│       ├── app.go           # ✅ Bubble Tea app
-│       ├── styles.go        # [TODO] Centralized styles
-│       └── components/      # [TODO] Reusable components
-├── .zap/                    # Created at runtime
-├── .gitignore
-├── go.mod
-├── go.sum
-├── README.md
-├── progress.md              # AI agent handoff doc
-└── project.md               # Full architecture plan
+│       ├── app.go            # Minimal TUI (viewport, textinput, spinner)
+│       └── styles.go         # Minimal styling (5 colors, log prefixes)
 ```
 
-## Next Steps
+## Working with the Agent
 
-### 1. Enhance TUI with Huh Forms
-Replace basic string input with proper forms from `huh`.
-
-**File:** `pkg/tui/app.go`
-
+### Tool Interface
+Every new capability must implement the `Tool` interface in `pkg/core/agent.go`:
 ```go
-import "github.com/charmbracelet/huh"
-
-// Add proper input forms for:
-// - API endpoint
-// - HTTP method selection
-// - Request body
+type Tool interface {
+    Name() string
+    Description() string
+    Parameters() string
+    Execute(args string) (string, error)
+}
 ```
 
-### 2. Implement Ollama Client
-Create raw HTTP client to connect to Ollama API.
-
-**File:** `pkg/llm/ollama.go`
-
+### Agent Event System (New)
+The agent now supports real-time event emission:
 ```go
-package llm
-
-type OllamaClient struct {
-    baseURL string
-    model   string
+type AgentEvent struct {
+    Type    string // "thinking", "tool_call", "observation", "answer", "error"
+    Content string
 }
 
-func (c *OllamaClient) Chat(messages []Message) (string, error) {
-    // POST to /api/chat
+type EventCallback func(AgentEvent)
+
+// Use this for real-time UI updates
+agent.ProcessMessageWithEvents(input, callback)
+
+// Or use the original blocking version
+agent.ProcessMessage(input)
+```
+
+### Logging
+- Use `fmt.Fprintf(os.Stderr, ...)` for debug info
+- stdout belongs to the TUI - never print there directly
+
+## Getting Started
+
+### Requirements
+- Go 1.23+
+- Ollama Cloud API Key (for `ollama.com`)
+
+### Configuration
+Create a `.env` file in the root:
+```env
+OLLAMA_API_KEY=your_key_here
+```
+
+Ensure `.zap/config.json` uses a cloud model:
+```json
+{
+  "ollama_url": "https://ollama.com",
+  "default_model": "gpt-oss:20b-cloud"
 }
 ```
 
-### 3. Implement HTTP Client Tool
-First tool: execute HTTP requests.
-
-**File:** `pkg/core/tools/http.go`
-
-```go
-type HTTPTool struct{}
-
-func (t *HTTPTool) Execute(method, url string, body interface{}) (*Response, error) {
-    // Perform HTTP request
-    // Return structured response
-}
+### Build & Run
+```bash
+go build -o zap.exe ./cmd/zap
+./zap.exe
 ```
 
-### 4. Build ReAct Loop
-Agent orchestration logic.
+## TUI Architecture
 
-**File:** `pkg/core/agent.go`
+### Components Used
+- `bubbles/viewport` - Scrollable log area
+- `bubbles/textinput` - Single-line input with `> ` prompt
+- `bubbles/spinner` - Loading indicator
+- `glamour` - Markdown rendering for responses
+- `lipgloss` - Minimal styling
 
-```go
-type Agent struct {
-    llm   *llm.OllamaClient
-    tools map[string]Tool
-}
+### Styling
+Minimal 5-color palette:
+- `#6c6c6c` - Dim (thinking, observations, help)
+- `#e0e0e0` - Text (user input, responses)
+- `#7aa2f7` - Accent (prompt, title)
+- `#f7768e` - Error
+- `#9ece6a` - Tool calls
 
-func (a *Agent) Run(userInput string) error {
-    // Reason -> Act -> Observe loop
-}
+Log prefixes:
+- `> ` - User input
+- `  thinking ` - Agent reasoning
+- `  tool ` - Tool being called
+- `  result ` - Tool observation
+- `  error ` - Errors
+
+### Message Flow
+```
+User Input
+    ↓
+TUI captures Enter key
+    ↓
+runAgentAsync() starts goroutine
+    ↓
+Agent.ProcessMessageWithEvents() runs
+    ↓
+Callback sends AgentEvent via program.Send()
+    ↓
+TUI Update() receives agentEventMsg
+    ↓
+Appends to logs[], updates viewport
+    ↓
+agentDoneMsg signals completion
 ```
 
-## Development Workflow
+## What's Still Needed
 
-1. **Make changes** to code
-2. **Build**: `go build -o zap.exe ./cmd/zap`
-3. **Test**: `./zap`
-4. **Iterate**: Fix issues, repeat
+### For True Claude Code Style
+1. Streaming responses (show text as it arrives)
+2. Better log formatting and word wrapping
+3. Status line showing current state
+4. Keyboard navigation through history
+5. Multi-line input support
 
-## Dependencies
-
-All Charm libraries are installed:
-- ✅ `github.com/charmbracelet/bubbletea`
-- ✅ `github.com/charmbracelet/lipgloss`
-- ✅ `github.com/charmbracelet/huh`
-- ✅ `github.com/charmbracelet/bubbles`
-- ✅ `github.com/charmbracelet/glamour`
-- ✅ `github.com/spf13/cobra`
-- ✅ `github.com/spf13/viper`
-- ✅ `github.com/joho/godotenv`
-
-## Tips
-
-1. **Color Palette** (defined in `pkg/tui/app.go`):
-   - Primary: `#FF6B9D` (pink)
-   - Secondary: `#C792EA` (purple)
-   - Accent: `#89DDFF` (blue)
-   - Background: `#1E1E2E` (dark)
-
-2. **Cobra Commands**: To add subcommands, create new files in `cmd/zap/`
-
-3. **Testing**: Run `go test ./...` to run all tests
+### Phase 2 Goals
+1. `FileSystem` tool - Read local code
+2. `CodeSearch` tool - Grep-based search
+3. History persistence to `.zap/history.jsonl`
+4. Variable system for reusable values
 
 ## Debugging
 
-- Check `.zap/config.json` for configuration issues
-- View `.zap/history.jsonl` for conversation logs
-- Use `fmt.Println()` for quick debugging
-
-## Resources
-
-- [Charm Docs](https://charm.sh/)
-- [Cobra Docs](https://cobra.dev/)
-- [Viper Docs](https://github.com/spf13/viper)
-- [Ollama API](https://github.com/ollama/ollama/blob/main/docs/api.md)
+- If agent returns empty responses, check stderr logs
+- Model name must match Ollama Cloud exactly (use `:cloud` suffix)
+- Use `ctrl+c` or `esc` to quit cleanly
+- Mouse wheel scrolls the viewport

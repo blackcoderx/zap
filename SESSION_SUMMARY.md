@@ -1,215 +1,86 @@
-# Session Summary - ZAP Development
+# ZAP Session Summary: Minimal TUI Redesign (Claude Code Style)
 
-**Date:** 2026-01-20  
-**Phase:** Phase 1 (Smart Curl MVP) - 90% Complete
+This session focused on redesigning the TUI from a colorful chat interface to a minimal, log-centric design inspired by Claude Code.
 
----
+## Key Accomplishments
 
-## 🎯 Accomplishments
+### 1. Agent Event System (`pkg/core/agent.go`)
+- **New Types**: Added `AgentEvent` struct and `EventCallback` type
+- **Real-time Events**: Created `ProcessMessageWithEvents()` that emits events at each ReAct stage:
+  - `thinking` - When agent is reasoning
+  - `tool_call` - When a tool is about to execute
+  - `observation` - When tool returns result
+  - `answer` - Final response ready
+  - `error` - Something went wrong
+- **Backwards Compatible**: Original `ProcessMessage()` still works
 
-### 1. Project Foundation
-- ✅ Initialized Go module: `github.com/blackcoderx/zap`
-- ✅ Installed all dependencies (Charm ecosystem, Cobra, Viper)
-- ✅ Created proper project structure (cmd, pkg with subdirectories)
-- ✅ Set up `.gitignore` for Go + ZAP specifics
+### 2. Minimal TUI Redesign (`pkg/tui/app.go`)
+- **Viewport**: Replaced fixed message box with scrollable `bubbles/viewport`
+- **TextInput**: Single-line input with `> ` prompt using `bubbles/textinput`
+- **Spinner**: Loading indicator using `bubbles/spinner`
+- **Glamour**: Markdown rendering for agent responses
+- **Async Events**: Agent runs in goroutine, sends events via `program.Send()`
+- **Mouse Support**: Enabled mouse cell motion for viewport scrolling
 
-### 2. Core Features Implemented
+### 3. Minimal Styling (`pkg/tui/styles.go`)
+- **Reduced Palette**: Only 5 colors (dim, text, accent, error, tool)
+- **Removed**: All decorative borders, emoji indicators, vibrant colors
+- **Prefixes**: Claude Code-style log prefixes:
+  - `> ` for user input
+  - `  thinking ` for agent reasoning
+  - `  tool ` for tool calls
+  - `  result ` for observations
+  - `  error ` for errors
 
-#### `.zap` Folder Initialization (`pkg/core/init.go`)
-```go
-- Auto-creates on first run
-- config.json with Ollama settings
-- history.jsonl for conversation logs
-- memory.json for agent memory
+### 4. Dependencies Added
+- `github.com/charmbracelet/bubbles` - viewport, textinput, spinner components
+- `github.com/charmbracelet/glamour` - Markdown rendering
+
+## Current UI Layout
+```
+zap - AI-powered API testing
+
+> user input here
+  thinking reasoning (step 1)...
+  tool http_request
+  result {"status": 200, ...}
+Final markdown-rendered response here
+
+> [cursor]
+esc to quit
 ```
 
-#### LLM Integration (`pkg/llm/ollama.go`)
-```go
-- Raw HTTP client (no LangChain)
-- Chat API integration
-- Connection health check
-- Proper error handling
-```
+## What's Still Needed for True Claude Code Style
 
-#### HTTP Client Tool (`pkg/core/tools/http.go`)
-```go
-- Supports GET, POST, PUT, DELETE
-- JSON request/response handling
-- Pretty-printing for JSON
-- Headers and timing included
-```
+The current implementation is minimal but not yet at Claude Code level:
 
-#### Beautiful TUI (`pkg/tui/`)
-```go
-// app.go
-- Bubble Tea integration
-- Message history with user/assistant distinction
-- Thinking states
-- Ollama connection check on startup
-- Error display
+1. **Streaming responses**: Show text as it arrives, not all at once
+2. **Better log formatting**: More sophisticated line wrapping and truncation
+3. **Status line**: Show current state (idle, thinking, executing tool)
+4. **Keyboard navigation**: Arrow keys to scroll through history
+5. **Copy/paste support**: Better clipboard integration
+6. **Multi-line input**: Support for pasting multi-line content
 
-// styles.go
-- Centralized color palette
-- Vibrant theme (pink, purple, blue)
-- Consistent styling across components
-```
+## Files Modified This Session
 
-### 3. Build System
-- ✅ Successfully compiles to `zap.exe`
-- ✅ No warnings or errors
-- ✅ Size: ~9MB (with all dependencies)
+| File | Changes |
+|------|---------|
+| `pkg/core/agent.go` | Added `AgentEvent`, `EventCallback`, `ProcessMessageWithEvents()` |
+| `pkg/tui/app.go` | Complete rewrite with viewport, textinput, spinner, glamour |
+| `pkg/tui/styles.go` | Minimal 5-color palette, log prefixes, removed borders |
+| `go.mod` | Added bubbles, glamour dependencies |
 
----
+## Next Steps for Future Agents
 
-## 📁 Final Project Structure
+1. **Refine UI**: Get closer to Claude Code's polish (streaming, better formatting)
+2. **Phase 2 Tools**: Implement `FileSystem` and `CodeSearch` tools
+3. **History Persistence**: Save conversation to `.zap/history.jsonl`
+4. **Variable System**: Save/reuse variables across requests
 
-```
-zap/
-├── cmd/
-│   └── zap/
-│       └── main.go              # Entry point, Cobra CLI
-├── pkg/
-│   ├── core/
-│   │   ├── init.go              # .zap folder initialization
-│   │   └── tools/
-│   │       └── http.go          # HTTP client tool
-│   ├── llm/
-│   │   └── ollama.go            # Ollama API client
-│   └── tui/
-│       ├── app.go               # Main TUI app
-│       └── styles.go            # Centralized styles
-├── .gitignore                   # Git exclusions
-├── go.mod                       # Dependencies
-├── go.sum                       # Dependency checksums
-├── README.md                    # User documentation
-├── DEVELOPMENT.md               # Developer guide
-├── progress.md                  # AI handoff doc
-├── project.md                   # Architecture plan
-└── zap.exe                      # Compiled binary
-```
-
----
-
-## 🚀 Current Capabilities
-
-### What Works RIGHT NOW:
-1. **Chat with AI**: Type a message, get a response from Ollama
-2. **Message History**: Conversation context is maintained
-3. **Connection Check**: Verifies Ollama is running on startup
-4. **Error Handling**: Clear messages if Ollama is unavailable
-5. **Beautiful UI**: Vibrant colors, clean layout, proper spacing
-
-### What's NOT Yet Hooked Up:
-- **ReAct Loop**: Agent doesn't use tools yet (just chats)
-- **HTTP Tool Integration**: Tool exists but LLM doesn't call it
-- **Function Calling**: Need to implement tool use pattern
-
----
-
-## 🔧 Next Steps (Final 10%)
-
-To complete Phase 1, we need to:
-
-### 1. Implement Agent Core (`pkg/core/agent.go`)
-```go
-type Agent struct {
-    llm   *llm.OllamaClient
-    tools map[string]Tool
-}
-
-func (a *Agent) ProcessMessage(userInput string) (string, error) {
-    // ReAct Loop:
-    // 1. Think: What tool do I need?
-    // 2. Act: Execute the tool
-    // 3. Observe: See the result
-    // 4. Respond: Answer the user
-}
-```
-
-### 2. Update System Prompt
-Add tool descriptions so the LLM knows what's available:
-```
-Available Tools:
-- http_request: Make HTTP requests (GET, POST, PUT, DELETE)
-  Input: {"method": "GET", "url": "https://api.example.com"}
-```
-
-### 3. Parse LLM Tool Calls
-Extract structured tool calls from LLM responses
-
-### 4. Wire Everything Together
-Update `pkg/tui/app.go` to use Agent instead of direct LLM calls
-
----
-
-## 📊 Progress Metrics
-
-- **Lines of Code**: ~600 (excluding dependencies)
-- **Files Created**: 11
-- **Build Time**: ~3 seconds
-- **Dependencies**: 40+ (including transitive)
-- **Completion**: 90% of Phase 1
-
----
-
-## 🎨 Design Highlights
-
-**Color Palette:**
-- Primary: `#FF6B9D` (Pink) - Titles, branding
-- Secondary: `#C792EA` (Purple) - Borders, accents
-- Accent: `#89DDFF` (Blue) - Input prompts
-- Success: `#A6E3A1` (Green) - Confirmations
-- Error: `#F38BA8` (Red) - Error messages
-- Warning: `#FAB387` (Orange) - Thinking states
-
-**Typography:**
-- Bold titles
-- Italic subtitles
-- Monospace for code/JSON
-
----
-
-## 🧪 Testing Instructions
-
-### Build and Run:
+## Build & Run
 ```bash
-cd c:\Users\user\zap
 go build -o zap.exe ./cmd/zap
-./zap
+./zap.exe
 ```
 
-### Prerequisites:
-1. Ollama must be running: `ollama serve`
-2. Have a model pulled: `ollama pull llama3`
-
-### What to Try:
-- Type: "Hello, who are you?"
-- Type: "What can you help me with?"
-- Type: "Tell me a joke"
-
-**Note:** HTTP requests won't work yet - we need the agent implementation!
-
----
-
-## 📝 Documentation Created
-
-1. **README.md** - User-facing project overview with installation instructions
-2. **DEVELOPMENT.md** - Developer guide with architecture and next steps
-3. **progress.md** - AI agent handoff document (comprehensive)
-4. **project.md** - Full architecture plan (3 phases, tech stack, risks)
-
----
-
-## 🎯 Success Criteria Met
-
-- ✅ Beautiful, modern TUI
-- ✅ Ollama integration working
-- ✅ HTTP tool implemented
-- ✅ Error handling robust
-- ✅ Code well-structured
-- ✅ Documentation complete
-- ✅ No build errors
-
-**Phase 1 Status: NEARLY COMPLETE** 🎉
-
-Just need to wire the agent loop to make ZAP actually test APIs!
+**The foundation is solid. Time to polish.**
