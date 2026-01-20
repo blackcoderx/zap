@@ -2,129 +2,211 @@ package tui
 
 import (
 	"fmt"
+	"strings"
 
+	"github.com/blackcoderx/zap/pkg/llm"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/spf13/viper"
 )
 
-var (
-	// Color palette
-	primaryColor   = lipgloss.Color("#FF6B9D")
-	secondaryColor = lipgloss.Color("#C792EA")
-	accentColor    = lipgloss.Color("#89DDFF")
-	bgColor        = lipgloss.Color("#1E1E2E")
-	textColor      = lipgloss.Color("#CDD6F4")
-	mutedColor     = lipgloss.Color("#6C7086")
-
-	// Styles
-	titleStyle = lipgloss.NewStyle().
-			Foreground(primaryColor).
-			Bold(true).
-			Padding(1, 2)
-
-	subtitleStyle = lipgloss.NewStyle().
-			Foreground(mutedColor).
-			Italic(true).
-			Padding(0, 2, 1, 2)
-
-	inputPromptStyle = lipgloss.NewStyle().
-				Foreground(accentColor).
-				Bold(true)
-
-	containerStyle = lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(secondaryColor).
-			Padding(1).
-			Width(80)
-
-	helpStyle = lipgloss.NewStyle().
-			Foreground(mutedColor).
-			Padding(1, 2)
-)
+type chatMessage struct {
+	role    string // "user" or "assistant"
+	content string
+}
 
 type model struct {
-	input       string
-	messages    []string
-	thinking    bool
-	err         error
-	width       int
-	height      int
-	cursorBlink bool
+	input        string
+	messages     []chatMessage
+	thinking     bool
+	err          error
+	width        int
+	height       int
+	ollamaClient *llm.OllamaClient
+	ready        bool
+}
+
+type ollamaResponseMsg struct {
+	response string
+	err      error
 }
 
 func initialModel() model {
+	// Get config from viper
+	ollamaURL := viper.GetString("ollama_url")
+	if ollamaURL == "" {
+		ollamaURL = "http://localhost:11434"
+	}
+
+	defaultModel := viper.GetString("default_model")
+	if defaultModel == "" {
+		defaultModel = "llama3"
+	}
+
 	return model{
-		input:    "",
-		messages: []string{},
-		thinking: false,
+		input:        "",
+		messages:     []chatMessage{},
+		thinking:     false,
+		ollamaClient: llm.NewOllamaClient(ollamaURL, defaultModel),
+		ready:        false,
 	}
 }
 
 func (m model) Init() tea.Cmd {
-	return tea.EnterAltScreen
+	return tea.Batch(
+		tea.EnterAltScreen,
+		checkOllamaConnection(m.ollamaClient),
+	)
+}
+
+func checkOllamaConnection(client *llm.OllamaClient) tea.Cmd {
+	return func() tea.Msg {
+		err := client.CheckConnection()
+		return ollamaResponseMsg{err: err}
+	}
+}
+
+func sendToOllama(client *llm.OllamaClient, messages []chatMessage) tea.Cmd {
+	return func() tea.Msg {
+		// Convert to LLM messages
+		llmMessages := make([]llm.Message, 0, len(messages)+1)
+
+		// Add system message
+		llmMessages = append(llmMessages, llm.Message{
+			Role:    "system",
+			Content: "You are ZAP, an AI assistant for API testing. You help developers test, understand, and debug APIs. Be concise and helpful.",
+		})
+
+		// Add conversation history
+		for _, msg := range messages {
+			llmMessages = append(llmMessages, llm.Message{
+				Role:    msg.role,
+				Content: msg.content,
+			})
+		}
+
+		response, err := client.Chat(llmMessages)
+		return ollamaResponseMsg{response: response, err: err}
+	}
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
-		case "ctrl+c", "q":
+		case "ctrl+c", "esc":
 			return m, tea.Quit
 		case "enter":
-			if m.input != "" {
-				m.messages = append(m.messages, fmt.Sprintf("You: %s", m.input))
+			if m.input != "" && !m.thinking {
+				userMsg := chatMessage{
+					role:    "user",
+					content: m.input,
+				}
+				m.messages = append(m.messages, userMsg)
+				m.thinking = true
 				m.input = ""
+
+				// Send to Ollama
+				return m, sendToOllama(m.ollamaClient, m.messages)
 			}
 		case "backspace":
-			if len(m.input) > 0 {
+			if len(m.input) > 0 && !m.thinking {
 				m.input = m.input[:len(m.input)-1]
 			}
 		default:
-			m.input += msg.String()
+			if !m.thinking && len(msg.String()) == 1 {
+				m.input += msg.String()
+			}
 		}
 
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
+
+	case ollamaResponseMsg:
+		m.thinking = false
+		if msg.err != nil {
+			if !m.ready {
+				// Connection check failed
+				m.err = fmt.Errorf("Ollama connection failed: %w\n\nMake sure Ollama is running: ollama serve", msg.err)
+			} else {
+				// Chat request failed
+				m.messages = append(m.messages, chatMessage{
+					role:    "assistant",
+					content: fmt.Sprintf("Error: %v", msg.err),
+				})
+			}
+		} else {
+			if !m.ready {
+				// Connection check succeeded
+				m.ready = true
+			} else {
+				// Chat response received
+				m.messages = append(m.messages, chatMessage{
+					role:    "assistant",
+					content: msg.response,
+				})
+			}
+		}
 	}
 
 	return m, nil
 }
 
 func (m model) View() string {
+	if m.err != nil {
+		return ErrorStyle.Render(fmt.Sprintf("❌ %s", m.err.Error()))
+	}
+
 	// Header
-	header := titleStyle.Render("⚡ ZAP") + "\n" +
-		subtitleStyle.Render("AI-powered API testing in your terminal")
+	header := TitleStyle.Render("⚡ ZAP") + "\n" +
+		SubtitleStyle.Render("AI-powered API testing in your terminal")
 
 	// Messages area
-	messagesView := ""
+	var messagesView strings.Builder
+
 	if len(m.messages) == 0 {
-		messagesView = lipgloss.NewStyle().
-			Foreground(mutedColor).
+		messagesView.WriteString(lipgloss.NewStyle().
+			Foreground(MutedColor).
 			Italic(true).
-			Render("No messages yet. Start by typing a command...")
+			Render("👋 Hi! I'm ZAP. Ask me to test an API or help with HTTP requests.\n\nFor example:\n  • Test the GitHub API\n  • Send a GET request to https://api.github.com\n  • What's my IP?"))
 	} else {
 		for _, msg := range m.messages {
-			messagesView += lipgloss.NewStyle().
-				Foreground(textColor).
-				Render(msg) + "\n"
+			if msg.role == "user" {
+				messagesView.WriteString(UserMessageStyle.Render(fmt.Sprintf("You: %s", msg.content)))
+			} else {
+				messagesView.WriteString(AssistantMessageStyle.Render(fmt.Sprintf("ZAP: %s", msg.content)))
+			}
+			messagesView.WriteString("\n\n")
 		}
 	}
 
-	// Input area
-	inputView := inputPromptStyle.Render("→ ") + m.input
-	if m.cursorBlink {
-		inputView += "▋"
+	if m.thinking {
+		messagesView.WriteString(ThinkingStyle.Render("⚡ Thinking..."))
 	}
 
-	// Help
-	help := helpStyle.Render("ctrl+c or q to quit • enter to send")
+	messagesBox := MessagesBoxStyle.Width(80).Render(messagesView.String())
 
-	// Container
-	content := containerStyle.Render(
-		header + "\n\n" +
-			messagesView + "\n\n" +
-			inputView,
+	// Input area
+	inputPrompt := "→ "
+	if m.thinking {
+		inputPrompt = "⏳ "
+	}
+
+	inputView := InputBoxStyle.Width(80).Render(
+		lipgloss.NewStyle().Foreground(AccentColor).Bold(true).Render(inputPrompt) + m.input + "▋",
+	)
+
+	// Help
+	help := HelpStyle.Render("ctrl+c or esc to quit • enter to send • Type your request above")
+
+	// Layout
+	content := lipgloss.JoinVertical(
+		lipgloss.Left,
+		header,
+		messagesBox,
+		inputView,
+		help,
 	)
 
 	return lipgloss.Place(
@@ -132,7 +214,7 @@ func (m model) View() string {
 		m.height,
 		lipgloss.Center,
 		lipgloss.Center,
-		content+"\n"+help,
+		content,
 	)
 }
 

@@ -61,7 +61,7 @@
 
 ## Implementation Roadmap
 
-### Phase 1: The "Smart Curl" (MVP) ← **IN PROGRESS**
+### Phase 1: The "Smart Curl" (MVP) ← **90% COMPLETE**
 **Goal:** A TUI that replaces curl/Postman for basic tasks
 
 **Tasks:**
@@ -75,35 +75,51 @@
 - [x] Build basic TUI
   - [x] Chat interface with Bubble Tea
   - [x] Beautiful styling with Lip Gloss (vibrant colors, modern aesthetic)
-  - [ ] Input form with Huh (next)
-  - [ ] Markdown rendering with Glamour (next)
-- [ ] Connect to Ollama
-  - [ ] Raw HTTP client to Ollama API
-  - [ ] Implement request/response handling
-  - [ ] Add streaming support for responses
-- [ ] Implement `HttpClient` tool
-  - [ ] Support GET, POST, PUT, DELETE
-  - [ ] Pretty-print JSON responses
-  - [ ] Show request/response in TUI
+  - [x] Centralized styles module
+  - [x] Message history display
+- [x] Connect to Ollama
+  - [x] Raw HTTP client to Ollama API (`pkg/llm/ollama.go`)
+  - [x] Implement request/response handling
+  - [x] Connection check on startup
+  - [ ] Add streaming support for responses (optional enhancement)
+- [x] Implement `HttpClient` tool
+  - [x] Support GET, POST, PUT, DELETE
+  - [x] Pretty-print JSON responses
+  - [ ] Integrate with agent (next step)
 
 **What's Working:**
 - ✅ Go project scaffolded with all dependencies
 - ✅ Cobra + Viper CLI framework initialized
+- ✅ **Ollama integration complete** - raw HTTP client working
 - ✅ Beautiful TUI with vibrant color palette (Charm stack)
+- ✅ Chat interface with message history
 - ✅ `.zap` folder auto-initialization on first run
-- ✅ Basic input handling (keyboard support)
+- ✅ Thinking/loading states
+- ✅ Error handling for Ollama connection
+- ✅ **HTTP client tool ready** for API requests
 - ✅ Build system working (`go build` produces `zap.exe`)
 
 **File Structure Created:**
 ```
 zap/
-├── cmd/zap/main.go          ✅ Entry point with Cobra
+├── cmd/zap/main.go           ✅ Entry point with Cobra
 ├── pkg/
-│   ├── core/init.go         ✅ .zap initialization logic
-│   └── tui/app.go           ✅ Beautiful TUI with Bubble Tea
-├── go.mod                   ✅ All dependencies installed
-└── zap.exe                  ✅ Built executable
+│   ├── core/
+│   │   ├── init.go           ✅ .zap initialization logic
+│   │   └── tools/
+│   │       └── http.go       ✅ HTTP client tool
+│   ├── llm/
+│   │   └── ollama.go         ✅ Ollama client (raw HTTP)
+│   └── tui/
+│       ├── app.go            ✅ Enhanced TUI with Ollama
+│       └── styles.go         ✅ Centralized styling
+├── go.mod                    ✅ All dependencies installed
+└── zap.exe                   ✅ Built executable (with AI!)
 ```
+
+**Next: Build the Agent (ReAct Loop)**
+The foundation is complete. Now we need to connect the LLM to the HTTP tool
+and implement the ReAct loop so ZAP can actually execute API requests.
 
 ### Phase 2: Security & Context
 **Goal:** Safe, context-aware API testing
