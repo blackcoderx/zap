@@ -1,23 +1,23 @@
 # ZAP Development Guide
 
-## Project Status: SPRINT 3 COMPLETE - PERSISTENCE & STORAGE
+## Project Status: SPRINT 4 COMPLETE - DEVELOPER EXPERIENCE
 
-Request persistence is live: Save/load API requests to YAML files with environment variable substitution. Ready for Sprint 4 (Developer Experience).
+ZAP now has a polished Developer Experience with JSON syntax highlighting, CLI scripting capabilities, clipboard support, and improved error messages. Ready for Sprint 5 (Launch Prep).
 
 ### Current Structure
 ```
 zap/
-├── cmd/zap/main.go           # Entry point with Cobra/Viper/Env
+├── cmd/zap/main.go           # Entry point with Cobra/Viper/Env (Interactive & CLI modes)
 ├── pkg/
 │   ├── core/
 │   │   ├── init.go           # .zap folder initialization
 │   │   ├── agent.go          # ReAct Agent + Event System + Error Diagnosis
 │   │   ├── analysis.go       # Stack trace parsing, error extraction
 │   │   └── tools/
-│   │       ├── http.go       # HTTP Tool + status code helpers
-│   │       ├── file.go       # read_file, list_files tools
-│   │       ├── search.go     # search_code tool (ripgrep/native)
-│   │       └── persistence.go # save/load requests, environment management
+│       │   ├── http.go       # HTTP Tool + status code helpers
+│       │   ├── file.go       # read_file, list_files tools
+│       │   ├── search.go     # search_code tool (ripgrep/native)
+│       │   └── persistence.go # save/load requests, environment management
 │   ├── llm/
 │   │   └── ollama.go         # Ollama Cloud client (Bearer auth)
 │   ├── storage/
@@ -26,7 +26,20 @@ zap/
 │   │   └── env.go            # Environment variable substitution
 │   └── tui/
 │       ├── app.go            # Minimal TUI (viewport, textinput, spinner)
-│       └── styles.go         # Minimal styling (7 colors, log prefixes)
+│       ├── styles.go         # Minimal styling (7 colors, log prefixes)
+│       └── highlight.go      # JSON syntax highlighting (Glamour)
+```
+
+## CLI Usage
+
+ZAP defaults to interactive TUI mode, but now supports CLI flags for scripting:
+
+```bash
+# Interactive mode
+zap
+
+# Run a saved request (non-interactive)
+zap --request my-request --env prod
 ```
 
 ## Working with the Agent
@@ -164,12 +177,19 @@ agentDoneMsg signals completion
 - ✓ Environment switching (`set_environment`, `list_environments` tools)
 - ✓ Auto-create `requests/` and `environments/` directories
 
-### Sprint 4 Goals (Developer Experience)
-1. JSON syntax highlighting in responses
-2. Better error messages
-3. `--help` and usage documentation
-4. `--request` CLI flag for scripting
-5. Request timing and response size display
+### Sprint 4 - Developer Experience - COMPLETE
+- ✓ JSON syntax highlighting in responses (Glamour)
+- ✓ CLI flags (`--request`, `--env`) for non-interactive mode
+- ✓ Request timing (ms) and size (KB) display
+- ✓ Clipboard support (`Ctrl+Y`)
+- ✓ Better tool error messages
+
+### Sprint 5 Goals (Launch Prep)
+1. Installation script (`curl | sh`)
+2. README with demo GIF
+3. Postman collection import
+4. GitHub releases with binaries
+5. Landing page
 
 ## Running on Other Projects
 

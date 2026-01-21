@@ -4,6 +4,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/atotto/clipboard"
 	"github.com/blackcoderx/zap/pkg/core"
 	"github.com/blackcoderx/zap/pkg/core/tools"
 	"github.com/blackcoderx/zap/pkg/llm"
@@ -174,6 +175,24 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.logs = []logEntry{}
 			m.streamingBuffer = ""
 			m.updateViewportContent()
+			return m, nil
+		case "ctrl+y":
+			// Copy last response to clipboard
+			var lastResponse string
+			for i := len(m.logs) - 1; i >= 0; i-- {
+				if m.logs[i].Type == "response" {
+					lastResponse = m.logs[i].Content
+					break
+				}
+			}
+			if lastResponse != "" {
+				_ = clipboard.WriteAll(lastResponse)
+				// Determine command to flash status?
+				// For now, we'll just rely on the user knowing it worked,
+				// or maybe we briefly change the status text?
+				// Since status is "idle", we can't easily override it without a timer.
+				// Let's just do it silently for now or we could add a temporary "copied" state.
+			}
 			return m, nil
 		case "ctrl+u":
 			// Clear input
@@ -388,11 +407,19 @@ func (m *model) formatLogEntry(entry logEntry) string {
 	case "tool":
 		return ToolStyle.Render(ToolPrefix + entry.Content)
 	case "observation":
+		// If the observation contains markdown code blocks, render with Glamour
+		if strings.Contains(entry.Content, "```") && m.renderer != nil {
+			rendered, err := m.renderer.Render(entry.Content)
+			if err == nil {
+				return strings.TrimSpace(rendered)
+			}
+		}
+
 		// Format observation with better truncation
 		content := entry.Content
-		if len(content) > 200 {
-			// Show first 150 chars and last 30 chars
-			content = content[:150] + " ... " + content[len(content)-30:]
+		if len(content) > 1000 {
+			// Show first 800 chars and last 100 chars
+			content = content[:800] + " ... " + content[len(content)-100:]
 		}
 		return ObservationStyle.Render(ObservationPrefix + content)
 	case "streaming":
@@ -472,6 +499,7 @@ func (m model) renderHelp() string {
 		parts = append(parts, ShortcutKeyStyle.Render("↑↓")+ShortcutDescStyle.Render(" history"))
 	}
 	parts = append(parts, ShortcutKeyStyle.Render("ctrl+l")+ShortcutDescStyle.Render(" clear"))
+	parts = append(parts, ShortcutKeyStyle.Render("ctrl+y")+ShortcutDescStyle.Render(" copy"))
 	parts = append(parts, ShortcutKeyStyle.Render("esc")+ShortcutDescStyle.Render(" quit"))
 
 	return strings.Join(parts, "  ")

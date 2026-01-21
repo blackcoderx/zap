@@ -1,7 +1,7 @@
 # ZAP Development Progress
 
 **Last Updated:** 2026-01-21
-**Current Phase:** Sprint 3 Complete - Persistence & Storage
+**Current Phase:** Sprint 4 Complete - Developer Experience
 
 ---
 
@@ -57,6 +57,16 @@
 - [x] Create default `dev.yaml` environment template
 - [x] Update agent system prompt with persistence guidance
 - [x] Fix stack trace line number bug in `analysis.go`
+
+### Sprint 4: Developer Experience - COMPLETE
+- [x] Implement JSON Syntax Highlighting (`pkg/tui/highlight.go` + Glamour)
+- [x] Add Request Timing (ms) and Size (KB) to response display
+- [x] Enhance `http_request` tool output with Markdown code blocks
+- [x] Improve Agent error messages (Connection Error, Empty Response, Max Steps)
+- [x] Implement `zap --request <file>` CLI flag for non-interactive execution
+- [x] Implement `zap --env <name>` CLI flag
+- [x] Add `Ctrl+Y` shortcut to copy last response to clipboard
+- [x] Update `--help` documentation and descriptions
 
 ---
 
@@ -117,8 +127,9 @@ zap/
 - ✓ **Sprint 1**: Codebase Tools (read_file, list_files, search_code)
 - ✓ **Sprint 2**: Error-Code Pipeline (diagnosis workflow, stack traces)
 - ✓ **Sprint 3**: Persistence & Storage (YAML save/load, environments)
+- ✓ **Sprint 4**: Developer Experience (JSON highlight, CLI flags, Clipboard)
 
-### Sprint 4: Developer Experience (NEXT)
+### Sprint 5: Launch Prep (NEXT)
 - [ ] JSON syntax highlighting in responses
 - [ ] Better error messages
 - [ ] `--help` and usage documentation
@@ -127,11 +138,6 @@ zap/
 - [ ] Response size display
 - [ ] Copy response to clipboard
 
-### Sprint 5: Launch Prep
-- [ ] Postman collection import
-- [ ] Installation script (`curl | sh`)
-- [ ] README with demo GIF
-- [ ] GitHub releases with binaries
 
 ### Future
 - [ ] `FileEdit` tool with human approval

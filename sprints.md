@@ -299,11 +299,11 @@ zap --request get-users.yaml --output json | jq '.data'
 ```
 
 ### Acceptance Criteria
-- [ ] JSON responses are syntax highlighted
-- [ ] Response shows status, time, size
-- [ ] `--help` shows all options
-- [ ] Can execute requests non-interactively
-- [ ] Error messages are helpful, not cryptic
+- [x] JSON responses are syntax highlighted
+- [x] Response shows status, time, size
+- [x] `--help` shows all options
+- [x] Can execute requests non-interactively
+- [x] Error messages are helpful, not cryptic
 
 ### Definition of Done
 Show ZAP to 3 developers who haven't seen it. They can:
@@ -437,6 +437,5 @@ The query is missing a WHERE clause, causing a full table scan that times out.
 3. **End each sprint** with Definition of Done verification
 4. **Adjust** based on actual velocity and learnings
 
-**Current Sprint:** Sprint 3 - Persistence & Storage ✅ COMPLETE (P0 tasks)
-
-**Next Sprint:** Sprint 4 - Developer Experience
+**Current Sprint:** Sprint 4 - Developer Experience ✅ COMPLETE
+**Next Sprint:** Sprint 5 - Launch Prep

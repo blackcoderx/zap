@@ -149,12 +149,14 @@ func (a *Agent) ProcessMessageWithEvents(input string, callback EventCallback) (
 
 		response, streamErr = a.llmClient.ChatStream(messages, streamCallback)
 		if streamErr != nil {
-			callback(AgentEvent{Type: "error", Content: streamErr.Error()})
+			errorMsg := fmt.Sprintf("Connection Error: Could not talk to the AI provider.\nDetails: %v\n\nTip: Check if Ollama is running (try 'ollama serve') or check your API key.", streamErr)
+			callback(AgentEvent{Type: "error", Content: errorMsg})
 			return "", fmt.Errorf("agent chat error: %w", streamErr)
 		}
 
 		if response == "" {
-			callback(AgentEvent{Type: "error", Content: "empty response from AI"})
+			errorMsg := "Received an empty response from the AI. This usually happens if the model crashed or timed out."
+			callback(AgentEvent{Type: "error", Content: errorMsg})
 			return "I received an empty response from the AI.", nil
 		}
 
@@ -175,8 +177,11 @@ func (a *Agent) ProcessMessageWithEvents(input string, callback EventCallback) (
 		if toolName != "" {
 			tool, ok := a.tools[toolName]
 			if !ok {
-				observation := fmt.Sprintf("Tool '%s' not found", toolName)
-				callback(AgentEvent{Type: "error", Content: observation})
+				// Agent sees this error
+				observation := fmt.Sprintf("System Error: Tool '%s' does not exist. Please use only available tools.", toolName)
+				// User sees this error
+				callback(AgentEvent{Type: "error", Content: fmt.Sprintf("The agent tried to use an unknown tool '%s'.", toolName)})
+
 				a.history = append(a.history, llm.Message{Role: "assistant", Content: response})
 				a.history = append(a.history, llm.Message{Role: "user", Content: fmt.Sprintf("Observation: %s", observation)})
 				continue
@@ -188,7 +193,8 @@ func (a *Agent) ProcessMessageWithEvents(input string, callback EventCallback) (
 			// Execute tool
 			observation, err := tool.Execute(toolArgs)
 			if err != nil {
-				observation = fmt.Sprintf("Error: %v", err)
+				// Detailed error for the agent to self-correct
+				observation = fmt.Sprintf("Tool Execution Error: %v", err)
 			}
 
 			// Emit observation event
@@ -206,7 +212,7 @@ func (a *Agent) ProcessMessageWithEvents(input string, callback EventCallback) (
 		return finalAnswer, nil
 	}
 
-	msg := "Reached maximum steps without finding a final answer."
+	msg := "I stopped because I reached the maximum number of steps (5). This usually means I got stuck in a loop or the task is too complex.\nTip: Try breaking your request into smaller steps."
 	callback(AgentEvent{Type: "error", Content: msg})
 	return msg, nil
 }

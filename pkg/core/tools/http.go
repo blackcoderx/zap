@@ -169,8 +169,14 @@ func StatusCodeMeaning(code int) string {
 func (r *HTTPResponse) FormatResponse() string {
 	var sb strings.Builder
 
-	// Status line with meaning
-	sb.WriteString(fmt.Sprintf("Status: %s (%dms)\n", r.Status, r.Duration.Milliseconds()))
+	// Calculate body size
+	bodySize := len(r.Body)
+	sizeStr := formatSize(bodySize)
+
+	// Status line with meaning, duration, and size
+	sb.WriteString(fmt.Sprintf("Status: %s\n", r.Status))
+	sb.WriteString(fmt.Sprintf("Time:   %dms\n", r.Duration.Milliseconds()))
+	sb.WriteString(fmt.Sprintf("Size:   %s\n", sizeStr))
 	sb.WriteString(fmt.Sprintf("Meaning: %s\n\n", StatusCodeMeaning(r.StatusCode)))
 
 	// Headers (condensed - only show important ones)
@@ -200,9 +206,16 @@ func (r *HTTPResponse) FormatResponse() string {
 	sb.WriteString("Body:\n")
 	var prettyJSON bytes.Buffer
 	if err := json.Indent(&prettyJSON, []byte(r.Body), "", "  "); err == nil {
+		sb.WriteString("```json\n")
 		sb.WriteString(prettyJSON.String())
+		sb.WriteString("\n```")
 	} else {
-		sb.WriteString(r.Body)
+		// If not JSON, just show as text (maybe truncated if too long?)
+		if len(r.Body) > 5000 {
+			sb.WriteString(r.Body[:5000] + "\n... (truncated)")
+		} else {
+			sb.WriteString(r.Body)
+		}
 	}
 
 	// Add error hints for common status codes
@@ -212,6 +225,19 @@ func (r *HTTPResponse) FormatResponse() string {
 	}
 
 	return sb.String()
+}
+
+func formatSize(bytes int) string {
+	const unit = 1024
+	if bytes < unit {
+		return fmt.Sprintf("%d B", bytes)
+	}
+	div, exp := int64(unit), 0
+	for n := bytes / unit; n >= unit; n /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
 }
 
 // getErrorHints provides debugging hints based on status code and response
