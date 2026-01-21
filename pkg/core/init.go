@@ -43,9 +43,49 @@ func InitializeZapFolder() error {
 			return err
 		}
 
+		// Create requests directory for saved requests
+		if err := os.Mkdir(filepath.Join(ZapFolderName, "requests"), 0755); err != nil {
+			return fmt.Errorf("failed to create requests folder: %w", err)
+		}
+
+		// Create environments directory for environment files
+		if err := os.Mkdir(filepath.Join(ZapFolderName, "environments"), 0755); err != nil {
+			return fmt.Errorf("failed to create environments folder: %w", err)
+		}
+
+		// Create default dev environment
+		if err := createDefaultEnvironment(); err != nil {
+			return err
+		}
+
 		fmt.Println("✓ .zap folder initialized successfully!")
 	}
 
+	// Ensure subdirectories exist (for upgrades from older versions)
+	ensureDir(filepath.Join(ZapFolderName, "requests"))
+	ensureDir(filepath.Join(ZapFolderName, "environments"))
+
+	return nil
+}
+
+// ensureDir creates a directory if it doesn't exist
+func ensureDir(path string) {
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		os.Mkdir(path, 0755)
+	}
+}
+
+// createDefaultEnvironment creates a default dev environment file
+func createDefaultEnvironment() error {
+	envContent := `# Development environment
+# Add your variables here, e.g.:
+# BASE_URL: http://localhost:3000
+# API_TOKEN: your-dev-token
+`
+	envPath := filepath.Join(ZapFolderName, "environments", "dev.yaml")
+	if err := os.WriteFile(envPath, []byte(envContent), 0644); err != nil {
+		return fmt.Errorf("failed to write dev environment: %w", err)
+	}
 	return nil
 }
 

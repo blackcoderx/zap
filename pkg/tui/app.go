@@ -75,14 +75,25 @@ func initialModel() model {
 	// Get current working directory for codebase tools
 	workDir, _ := os.Getwd()
 
+	// Get .zap directory path
+	zapDir := core.ZapFolderName
+
 	client := llm.NewOllamaClient(ollamaURL, defaultModel, ollamaAPIKey)
 	agent := core.NewAgent(client)
 
-	// Register tools
+	// Register codebase tools
 	agent.RegisterTool(tools.NewHTTPTool())
 	agent.RegisterTool(tools.NewReadFileTool(workDir))
 	agent.RegisterTool(tools.NewListFilesTool(workDir))
 	agent.RegisterTool(tools.NewSearchCodeTool(workDir))
+
+	// Register persistence tools
+	persistence := tools.NewPersistenceTool(zapDir)
+	agent.RegisterTool(tools.NewSaveRequestTool(persistence))
+	agent.RegisterTool(tools.NewLoadRequestTool(persistence))
+	agent.RegisterTool(tools.NewListRequestsTool(persistence))
+	agent.RegisterTool(tools.NewListEnvironmentsTool(persistence))
+	agent.RegisterTool(tools.NewSetEnvironmentTool(persistence))
 
 	// Create text input (single line, auto-wraps visually)
 	ti := textinput.New()

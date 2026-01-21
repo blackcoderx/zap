@@ -262,6 +262,14 @@ func (a *Agent) buildSystemPrompt() string {
 	sb.WriteString("- Go/Gin: Look for r.GET/r.POST, c.JSON, c.AbortWithError\n")
 	sb.WriteString("- Django: Look for @api_view, serializers, raise ValidationError\n\n")
 
+	sb.WriteString("## REQUEST PERSISTENCE\n")
+	sb.WriteString("You can save and load API requests for reuse:\n")
+	sb.WriteString("- Use save_request to save a request with variables like {{BASE_URL}}\n")
+	sb.WriteString("- Use load_request to load a saved request\n")
+	sb.WriteString("- Use list_requests to see all saved requests\n")
+	sb.WriteString("- Use set_environment to switch between dev/prod environments\n")
+	sb.WriteString("- Use list_environments to see available environments\n\n")
+
 	sb.WriteString("When you need to use a tool, you MUST use this format:\n")
 	sb.WriteString("Thought: <your reasoning>\n")
 	sb.WriteString("ACTION: <tool_name>(<json_arguments>)\n\n")

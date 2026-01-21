@@ -177,14 +177,14 @@ Requests persist, workflow feels professional.
 
 ### Tasks
 
-| Task | File | Effort | Priority |
-|------|------|--------|----------|
-| YAML request schema definition | `pkg/storage/schema.go` | 2h | P0 |
-| Save request to YAML | `pkg/storage/yaml.go` | 4h | P0 |
-| Load request from YAML | `pkg/storage/yaml.go` | 3h | P0 |
-| Request history in session | `pkg/tui/app.go` | 4h | P0 |
-| Collections/folders structure | `pkg/storage/collections.go` | 6h | P1 |
-| Environment variable substitution | `pkg/storage/env.go` | 4h | P1 |
+| Task | File | Effort | Priority | Status |
+|------|------|--------|----------|--------|
+| YAML request schema definition | `pkg/storage/schema.go` | 2h | P0 | ✅ DONE |
+| Save request to YAML | `pkg/storage/yaml.go` | 4h | P0 | ✅ DONE |
+| Load request from YAML | `pkg/storage/yaml.go` | 3h | P0 | ✅ DONE |
+| Request history in session | `pkg/tui/app.go` | 4h | P0 | ✅ DONE |
+| Collections/folders structure | `pkg/storage/collections.go` | 6h | P1 | - |
+| Environment variable substitution | `pkg/storage/env.go` | 4h | P1 | ✅ DONE |
 
 ### YAML Schema
 
@@ -226,11 +226,11 @@ API_TOKEN: "{{env:PROD_API_TOKEN}}"
 ```
 
 ### Acceptance Criteria
-- [ ] Can save current request to YAML
-- [ ] Can load and execute saved request
-- [ ] Variable substitution works (`{{VAR}}`)
-- [ ] Can switch environments
-- [ ] Files are human-readable and git-friendly
+- [x] Can save current request to YAML
+- [x] Can load and execute saved request
+- [x] Variable substitution works (`{{VAR}}`)
+- [x] Can switch environments
+- [x] Files are human-readable and git-friendly
 
 ### Definition of Done
 1. Save a request with variables
@@ -437,6 +437,6 @@ The query is missing a WHERE clause, causing a full table scan that times out.
 3. **End each sprint** with Definition of Done verification
 4. **Adjust** based on actual velocity and learnings
 
-**Current Sprint:** Sprint 2 - Error-Code Pipeline ✅ COMPLETE
+**Current Sprint:** Sprint 3 - Persistence & Storage ✅ COMPLETE (P0 tasks)
 
-**Next Sprint:** Sprint 3 - Persistence & Storage
+**Next Sprint:** Sprint 4 - Developer Experience

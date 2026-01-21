@@ -25,8 +25,9 @@ go build -o zap.exe ./cmd/zap
 
 - **cmd/zap/** - Application entry point using Cobra CLI framework
 - **pkg/core/** - Agent logic, event system, and initialization
-- **pkg/core/tools/** - Agent tools (HTTP, file, search)
+- **pkg/core/tools/** - Agent tools (HTTP, file, search, persistence)
 - **pkg/llm/** - LLM client implementations (Ollama)
+- **pkg/storage/** - Request persistence (YAML save/load, environments)
 - **pkg/tui/** - Minimal terminal UI using Bubble Tea
 
 ### Core Components
@@ -82,8 +83,29 @@ On first run, creates `.zap/` folder containing:
 - `config.json` - Ollama URL, model settings
 - `history.jsonl` - Conversation log
 - `memory.json` - Agent memory
+- `requests/` - Saved API requests (YAML files)
+- `environments/` - Environment configs (dev.yaml, prod.yaml, etc.)
 
 Environment: `OLLAMA_API_KEY` loaded from `.env` file.
+
+### Request Persistence
+
+Requests are saved as YAML files with variable substitution:
+```yaml
+# .zap/requests/get-users.yaml
+name: Get Users
+method: GET
+url: "{{BASE_URL}}/api/users"
+headers:
+  Authorization: "Bearer {{API_TOKEN}}"
+```
+
+Environments define variables:
+```yaml
+# .zap/environments/dev.yaml
+BASE_URL: http://localhost:3000
+API_TOKEN: dev-token-123
+```
 
 ### Adding New Tools
 
@@ -115,6 +137,10 @@ User Input → TUI captures Enter
 | `pkg/core/tools/http.go` | HTTP request tool + status code meanings/hints |
 | `pkg/core/tools/file.go` | `read_file` and `list_files` tools |
 | `pkg/core/tools/search.go` | `search_code` tool (ripgrep with native fallback) |
+| `pkg/core/tools/persistence.go` | Save/load requests, environment management |
+| `pkg/storage/schema.go` | YAML request/environment schema definitions |
+| `pkg/storage/yaml.go` | YAML file read/write operations |
+| `pkg/storage/env.go` | Environment variable substitution |
 
 ## Available Tools
 
@@ -124,6 +150,11 @@ User Input → TUI captures Enter
 | `read_file` | Read file contents (100KB limit, security bounded) |
 | `list_files` | List files with glob patterns (`**/*.go`, recursive) |
 | `search_code` | Search patterns in codebase (ripgrep with native fallback) |
+| `save_request` | Save API request to YAML file with {{VAR}} placeholders |
+| `load_request` | Load saved request from YAML (substitutes environment variables) |
+| `list_requests` | List all saved requests in `.zap/requests/` |
+| `set_environment` | Set active environment (dev, prod, etc.) |
+| `list_environments` | List available environments in `.zap/environments/` |
 
 ## Error Analysis Features
 
@@ -147,8 +178,10 @@ User Input → TUI captures Enter
 4. ✓ Read source code with context
 5. ✓ Parse stack traces from error responses
 6. ✓ Suggest fixes with code examples
+7. ✓ Save/load requests to YAML files
+8. ✓ Environment variable substitution ({{VAR}})
+9. ✓ Switch between dev/prod environments
 
 **What's Coming Next**:
-- Sprint 3: Save/load requests to YAML files (persistence)
 - Sprint 4: Polish (JSON syntax highlighting, response diffing)
 - Sprint 5: Launch prep (Postman import, installation script)

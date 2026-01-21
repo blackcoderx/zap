@@ -1,8 +1,8 @@
 # ZAP Development Guide
 
-## Project Status: SPRINT 2 COMPLETE - ERROR-CODE PIPELINE
+## Project Status: SPRINT 3 COMPLETE - PERSISTENCE & STORAGE
 
-The killer demo is ready: API errors trigger codebase search and diagnosis with file:line references. Ready for Sprint 3 (Persistence & Storage).
+Request persistence is live: Save/load API requests to YAML files with environment variable substitution. Ready for Sprint 4 (Developer Experience).
 
 ### Current Structure
 ```
@@ -16,9 +16,14 @@ zap/
 │   │   └── tools/
 │   │       ├── http.go       # HTTP Tool + status code helpers
 │   │       ├── file.go       # read_file, list_files tools
-│   │       └── search.go     # search_code tool (ripgrep/native)
+│   │       ├── search.go     # search_code tool (ripgrep/native)
+│   │       └── persistence.go # save/load requests, environment management
 │   ├── llm/
 │   │   └── ollama.go         # Ollama Cloud client (Bearer auth)
+│   ├── storage/
+│   │   ├── schema.go         # Request/Environment YAML schema
+│   │   ├── yaml.go           # YAML file operations
+│   │   └── env.go            # Environment variable substitution
 │   └── tui/
 │       ├── app.go            # Minimal TUI (viewport, textinput, spinner)
 │       └── styles.go         # Minimal styling (7 colors, log prefixes)
@@ -151,11 +156,20 @@ agentDoneMsg signals completion
 - ✓ Error context extraction from JSON
 - ✓ Natural language → HTTP request conversion
 
-### Sprint 3 Goals (Persistence & Storage)
-1. YAML request schema definition
-2. Save/load requests to YAML files
-3. Request history in session
-4. Environment variable substitution
+### Sprint 3 - Persistence & Storage - COMPLETE
+- ✓ YAML request schema definition (`pkg/storage/schema.go`)
+- ✓ Save/load requests to YAML files (`save_request`, `load_request` tools)
+- ✓ Request listing (`list_requests` tool)
+- ✓ Environment variable substitution (`{{VAR}}` syntax)
+- ✓ Environment switching (`set_environment`, `list_environments` tools)
+- ✓ Auto-create `requests/` and `environments/` directories
+
+### Sprint 4 Goals (Developer Experience)
+1. JSON syntax highlighting in responses
+2. Better error messages
+3. `--help` and usage documentation
+4. `--request` CLI flag for scripting
+5. Request timing and response size display
 
 ## Running on Other Projects
 

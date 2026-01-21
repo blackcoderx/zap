@@ -3,6 +3,7 @@ package core
 import (
 	"encoding/json"
 	"regexp"
+	"strconv"
 	"strings"
 )
 
@@ -217,9 +218,9 @@ func (ctx *ErrorContext) FormatErrorContext() string {
 		sb.WriteString("Stack Trace:\n")
 		for _, frame := range ctx.StackFrames {
 			if frame.Function != "" {
-				sb.WriteString("  " + frame.File + ":" + string(rune(frame.Line+'0')) + " in " + frame.Function + "\n")
+				sb.WriteString("  " + frame.File + ":" + strconv.Itoa(frame.Line) + " in " + frame.Function + "\n")
 			} else {
-				sb.WriteString("  " + frame.File + ":" + string(rune(frame.Line+'0')) + "\n")
+				sb.WriteString("  " + frame.File + ":" + strconv.Itoa(frame.Line) + "\n")
 			}
 		}
 	}

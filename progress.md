@@ -1,7 +1,7 @@
 # ZAP Development Progress
 
-**Last Updated:** 2026-01-20
-**Current Phase:** Phase 1.7 - Streaming & Multi-line Input Complete
+**Last Updated:** 2026-01-21
+**Current Phase:** Sprint 3 Complete - Persistence & Storage
 
 ---
 
@@ -46,6 +46,18 @@
 - [x] Fix viewport scrolling (only auto-scroll when at bottom)
 - [x] Add `pgup`/`pgdown`/`home`/`end` support for scrolling
 
+### Sprint 3: Persistence & Storage - COMPLETE
+- [x] Create `pkg/storage/` package with YAML schema definitions
+- [x] Implement `save_request` tool (save to `.zap/requests/*.yaml`)
+- [x] Implement `load_request` tool (load and substitute variables)
+- [x] Implement `list_requests` tool
+- [x] Implement `set_environment` and `list_environments` tools
+- [x] Add `{{VAR}}` variable substitution from environment files
+- [x] Auto-create `requests/` and `environments/` directories on init
+- [x] Create default `dev.yaml` environment template
+- [x] Update agent system prompt with persistence guidance
+- [x] Fix stack trace line number bug in `analysis.go`
+
 ---
 
 ## Current Architecture
@@ -80,40 +92,52 @@ zap/
 │   ├── core/
 │   │   ├── init.go           # .zap initialization
 │   │   ├── agent.go          # ReAct Agent + Event System
+│   │   ├── analysis.go       # Stack trace parsing, error extraction
 │   │   └── tools/
-│   │       └── http.go       # HTTP Tool
+│   │       ├── http.go       # HTTP Tool
+│   │       ├── file.go       # read_file, list_files tools
+│   │       ├── search.go     # search_code tool
+│   │       └── persistence.go # save/load requests, environments
 │   ├── llm/
 │   │   └── ollama.go         # Ollama Cloud client
+│   ├── storage/
+│   │   ├── schema.go         # YAML request/environment schema
+│   │   ├── yaml.go           # YAML file operations
+│   │   └── env.go            # Variable substitution
 │   └── tui/
 │       ├── app.go            # Minimal TUI
-│       └── styles.go         # 5-color palette, log prefixes
+│       └── styles.go         # 7-color palette, log prefixes
 ```
 
 ---
 
 ## What's Still Needed
 
-### For True Claude Code Style
-The UI is now at Claude Code level for core features:
+### Completed Sprints
+- ✓ **Sprint 1**: Codebase Tools (read_file, list_files, search_code)
+- ✓ **Sprint 2**: Error-Code Pipeline (diagnosis workflow, stack traces)
+- ✓ **Sprint 3**: Persistence & Storage (YAML save/load, environments)
 
-1. ~~**Streaming responses** - Show text as it arrives character by character~~ ✓ DONE
-2. ~~**Status line** - Persistent line showing current state~~ ✓ DONE
-3. ~~**Keyboard navigation** - Arrow keys to scroll history~~ ✓ DONE
-4. ~~**Better formatting** - Sophisticated word wrapping and truncation~~ ✓ DONE
-5. ~~**Viewport scrolling** - Scroll up to read past messages~~ ✓ DONE
+### Sprint 4: Developer Experience (NEXT)
+- [ ] JSON syntax highlighting in responses
+- [ ] Better error messages
+- [ ] `--help` and usage documentation
+- [ ] `--request` CLI flag for scripting
+- [ ] Request timing display
+- [ ] Response size display
+- [ ] Copy response to clipboard
 
-**All core Claude Code UI features complete!**
+### Sprint 5: Launch Prep
+- [ ] Postman collection import
+- [ ] Installation script (`curl | sh`)
+- [ ] README with demo GIF
+- [ ] GitHub releases with binaries
 
-### Phase 2: Security & Context (NEXT)
-- [ ] `.env` loader and secret manager
-- [ ] `FileSystem` tool (read local code)
-- [ ] `CodeSearch` tool (grep-based search)
-- [ ] Conversation history persistence to `.zap/history.jsonl`
-- [ ] Variable system for reusable values
-
-### Phase 3: The "Fixer" & Extension
+### Future
 - [ ] `FileEdit` tool with human approval
 - [ ] VS Code extension (JSON-RPC communication)
+- [ ] OAuth 2.0 flow support
+- [ ] Request chaining
 
 ---
 
