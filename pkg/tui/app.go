@@ -118,6 +118,11 @@ func initialModel() model {
 	agent.RegisterTool(tools.NewTestSuiteTool(httpTool, assertTool, extractTool, responseManager, varStore, zapDir))
 	agent.RegisterTool(tools.NewCompareResponsesTool(responseManager, zapDir))
 
+	// Register Sprint 3 tools (MVP)
+	agent.RegisterTool(tools.NewPerformanceTool(httpTool, varStore))
+	agent.RegisterTool(tools.NewWebhookListenerTool(varStore))
+	agent.RegisterTool(tools.NewAuthOAuth2Tool(varStore))
+
 	// Create text input (single line, auto-wraps visually)
 	ti := textinput.New()
 	ti.Placeholder = "Ask me anything..."

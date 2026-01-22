@@ -1,10 +1,14 @@
 package tools
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"strings"
+
+	"golang.org/x/oauth2"
+	"golang.org/x/oauth2/clientcredentials"
 )
 
 // AuthBearerTool creates Bearer token authorization headers (for JWT, API tokens, etc.)
@@ -316,4 +320,168 @@ func formatJSON(jsonStr string) string {
 	}
 
 	return string(pretty)
+}
+
+// AuthOAuth2Tool handles OAuth2 authentication flows
+type AuthOAuth2Tool struct {
+	varStore *VariableStore
+}
+
+// NewAuthOAuth2Tool creates a new OAuth2 auth tool
+func NewAuthOAuth2Tool(varStore *VariableStore) *AuthOAuth2Tool {
+	return &AuthOAuth2Tool{varStore: varStore}
+}
+
+// AuthOAuth2Params defines OAuth2 auth parameters
+type AuthOAuth2Params struct {
+	Flow         string   `json:"flow"`                    // "client_credentials", "password", "authorization_code"
+	TokenURL     string   `json:"token_url"`               // OAuth2 token endpoint
+	ClientID     string   `json:"client_id"`               // Client ID
+	ClientSecret string   `json:"client_secret"`           // Client secret
+	Scopes       []string `json:"scopes,omitempty"`        // Requested scopes
+	Username     string   `json:"username,omitempty"`      // For password flow
+	Password     string   `json:"password,omitempty"`      // For password flow
+	AuthURL      string   `json:"auth_url,omitempty"`      // For authorization_code flow
+	RedirectURL  string   `json:"redirect_url,omitempty"`  // For authorization_code flow
+	Code         string   `json:"code,omitempty"`          // For authorization_code flow
+	SaveTokenAs  string   `json:"save_token_as,omitempty"` // Variable name to save token
+}
+
+// Name returns the tool name
+func (t *AuthOAuth2Tool) Name() string {
+	return "auth_oauth2"
+}
+
+// Description returns the tool description
+func (t *AuthOAuth2Tool) Description() string {
+	return "Perform OAuth2 authentication flows (client_credentials, password). Obtains access token and saves to variable."
+}
+
+// Parameters returns the tool parameter description
+func (t *AuthOAuth2Tool) Parameters() string {
+	return `{
+  "flow": "client_credentials",
+  "token_url": "https://auth.example.com/token",
+  "client_id": "{{CLIENT_ID}}",
+  "client_secret": "{{CLIENT_SECRET}}",
+  "scopes": ["api:read", "api:write"],
+  "save_token_as": "oauth_token"
+}`
+}
+
+// Execute performs OAuth2 authentication
+func (t *AuthOAuth2Tool) Execute(args string) (string, error) {
+	// Substitute variables in args
+	if t.varStore != nil {
+		args = t.varStore.Substitute(args)
+	}
+
+	var params AuthOAuth2Params
+	if err := json.Unmarshal([]byte(args), &params); err != nil {
+		return "", fmt.Errorf("failed to parse parameters: %w", err)
+	}
+
+	// Validate common parameters
+	if params.TokenURL == "" {
+		return "", fmt.Errorf("'token_url' parameter is required")
+	}
+	if params.ClientID == "" {
+		return "", fmt.Errorf("'client_id' parameter is required")
+	}
+	if params.ClientSecret == "" {
+		return "", fmt.Errorf("'client_secret' parameter is required")
+	}
+
+	// Execute flow based on type
+	switch params.Flow {
+	case "client_credentials":
+		return t.clientCredentialsFlow(params)
+	case "password":
+		return t.passwordFlow(params)
+	case "authorization_code":
+		return "", fmt.Errorf("authorization_code flow requires manual browser interaction and is not supported in CLI mode. Use 'client_credentials' or 'password' flows instead")
+	default:
+		return "", fmt.Errorf("unknown flow '%s' (supported: client_credentials, password)", params.Flow)
+	}
+}
+
+// clientCredentialsFlow performs OAuth2 client credentials flow
+func (t *AuthOAuth2Tool) clientCredentialsFlow(params AuthOAuth2Params) (string, error) {
+	config := clientcredentials.Config{
+		ClientID:     params.ClientID,
+		ClientSecret: params.ClientSecret,
+		TokenURL:     params.TokenURL,
+		Scopes:       params.Scopes,
+	}
+
+	ctx := context.Background()
+	token, err := config.Token(ctx)
+	if err != nil {
+		return "", fmt.Errorf("OAuth2 client_credentials flow failed: %w", err)
+	}
+
+	return t.formatTokenResponse(token, params)
+}
+
+// passwordFlow performs OAuth2 password (Resource Owner Password Credentials) flow
+func (t *AuthOAuth2Tool) passwordFlow(params AuthOAuth2Params) (string, error) {
+	if params.Username == "" {
+		return "", fmt.Errorf("'username' parameter is required for password flow")
+	}
+	if params.Password == "" {
+		return "", fmt.Errorf("'password' parameter is required for password flow")
+	}
+
+	config := oauth2.Config{
+		ClientID:     params.ClientID,
+		ClientSecret: params.ClientSecret,
+		Endpoint: oauth2.Endpoint{
+			TokenURL: params.TokenURL,
+		},
+		Scopes: params.Scopes,
+	}
+
+	ctx := context.Background()
+	token, err := config.PasswordCredentialsToken(ctx, params.Username, params.Password)
+	if err != nil {
+		return "", fmt.Errorf("OAuth2 password flow failed: %w", err)
+	}
+
+	return t.formatTokenResponse(token, params)
+}
+
+// formatTokenResponse formats and saves the OAuth2 token
+func (t *AuthOAuth2Tool) formatTokenResponse(token *oauth2.Token, params AuthOAuth2Params) (string, error) {
+	var sb strings.Builder
+
+	sb.WriteString("OAuth2 Authentication Successful!\n\n")
+	sb.WriteString(fmt.Sprintf("Access Token: %s\n", token.AccessToken))
+	sb.WriteString(fmt.Sprintf("Token Type: %s\n", token.TokenType))
+
+	if token.RefreshToken != "" {
+		sb.WriteString(fmt.Sprintf("Refresh Token: %s\n", token.RefreshToken))
+	}
+
+	if !token.Expiry.IsZero() {
+		sb.WriteString(fmt.Sprintf("Expires: %s\n", token.Expiry.Format("2006-01-02 15:04:05")))
+	}
+
+	// Save token to variable if requested
+	if params.SaveTokenAs != "" && t.varStore != nil {
+		t.varStore.Set(params.SaveTokenAs, token.AccessToken)
+		sb.WriteString(fmt.Sprintf("\nToken saved as: {{%s}}\n", params.SaveTokenAs))
+
+		// Also save as Bearer header for convenience
+		authHeaderVar := params.SaveTokenAs + "_header"
+		bearerHeader := fmt.Sprintf("Bearer %s", token.AccessToken)
+		t.varStore.Set(authHeaderVar, bearerHeader)
+		sb.WriteString(fmt.Sprintf("Bearer header saved as: {{%s}}\n", authHeaderVar))
+
+		sb.WriteString("\nUse in requests:\n")
+		sb.WriteString("{\n")
+		sb.WriteString(fmt.Sprintf("  \"headers\": {\"Authorization\": \"{{%s}}\"}\n", authHeaderVar))
+		sb.WriteString("}\n")
+	}
+
+	return sb.String(), nil
 }

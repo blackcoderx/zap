@@ -144,6 +144,12 @@ User Input → TUI captures Enter
 | `pkg/core/tools/variables.go` | Variable management (session/global with persistence) |
 | `pkg/core/tools/timing.go` | Wait and retry tools (delays, backoff strategies) |
 | `pkg/core/tools/manager.go` | Response manager for sharing HTTP responses between tools |
+| `pkg/core/tools/schema.go` | JSON Schema validation tool (draft-07, draft-2020-12) |
+| `pkg/core/tools/auth.go` | Authentication tools (Bearer, Basic, OAuth2, JWT parsing) |
+| `pkg/core/tools/suite.go` | Test suite execution with pass/fail reporting |
+| `pkg/core/tools/diff.go` | Response comparison for regression testing |
+| `pkg/core/tools/perf.go` | Performance/load testing with latency metrics |
+| `pkg/core/tools/webhook.go` | Webhook listener (temporary HTTP server) |
 | `pkg/storage/schema.go` | YAML request/environment schema definitions |
 | `pkg/storage/yaml.go` | YAML file read/write operations |
 | `pkg/storage/env.go` | Environment variable substitution |
@@ -178,6 +184,13 @@ User Input → TUI captures Enter
 | `auth_helper` | Parse JWT tokens, decode Basic auth, show claims and metadata |
 | `test_suite` | Run organized test suites with multiple tests, assertions, and value extraction |
 | `compare_responses` | Compare API responses for regression testing with baseline management |
+
+### Performance & OAuth Tools (Sprint 3 - MVP)
+| Tool | Description |
+|------|-------------|
+| `performance_test` | Run load tests with concurrent users, measure latency (p50/p95/p99), throughput, error rate |
+| `webhook_listener` | Start temporary HTTP server to capture webhook callbacks (start/stop/get_requests) |
+| `auth_oauth2` | Perform OAuth2 authentication (client_credentials, password flows) |
 
 ### Codebase Analysis Tools
 | Tool | Description |
@@ -226,6 +239,16 @@ User Input → TUI captures Enter
 22. ✓ **JWT token parsing** (decode claims, expiration, subject)
 23. ✓ **Test suites** (organized multi-test execution)
 24. ✓ **Regression testing** (baseline comparison, diff detection)
+25. ✓ **Load testing** (concurrent users, latency percentiles, throughput)
+26. ✓ **Webhook capture** (temporary HTTP server for callbacks)
+27. ✓ **OAuth2 authentication** (client_credentials, password flows)
+
+**Sprint 1 Completed Features**:
+- ✓ Response assertions (status, headers, body, JSON path, timing)
+- ✓ Value extraction (JSON path, headers, cookies, regex)
+- ✓ Variable management (session/global with persistence)
+- ✓ Retry with exponential backoff
+- ✓ Wait/delay tools
 
 **Sprint 2 Completed Features**:
 - ✓ JSON Schema validation (contract testing)
@@ -235,12 +258,16 @@ User Input → TUI captures Enter
 - ✓ Test suite organization
 - ✓ Regression testing with baseline comparison
 
-**Future Enhancements (Sprint 3+)**:
-- OAuth2 authentication flows
-- Performance/load testing
+**Sprint 3 Completed Features (MVP)**:
+- ✓ Performance/load testing (concurrent users, p50/p95/p99 latency)
+- ✓ Webhook listener (capture callbacks with temporary server)
+- ✓ OAuth2 authentication (client_credentials, password flows)
+
+**Future Enhancements (Post-MVP)**:
 - Mock response generation
-- Webhook listeners
-- Complex workflows with conditionals
+- Complex workflows with DAG execution
+- Authorization Code OAuth2 flow (requires browser)
+- Distributed load testing
 
 ## CLI Usage
 
