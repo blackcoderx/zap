@@ -7,21 +7,21 @@ import (
 	"strings"
 )
 
-// StackFrame represents a single frame in a stack trace
+// StackFrame represents a single frame in a stack trace.
 type StackFrame struct {
-	File     string `json:"file"`
-	Line     int    `json:"line"`
-	Function string `json:"function"`
-	Code     string `json:"code"`
+	File     string `json:"file"`     // File path where error occurred
+	Line     int    `json:"line"`     // Line number
+	Function string `json:"function"` // Function name (if available)
+	Code     string `json:"code"`     // Source code snippet (optional)
 }
 
-// ErrorContext contains extracted error information from a response
+// ErrorContext contains extracted error information from a response.
 type ErrorContext struct {
-	Message     string       `json:"message"`
-	ErrorType   string       `json:"error_type"`
-	StackFrames []StackFrame `json:"stack_frames"`
-	Details     []string     `json:"details"`
-	Fields      []string     `json:"fields"` // Validation error fields
+	Message     string       `json:"message"`      // Main error message
+	ErrorType   string       `json:"error_type"`   // Type of error (e.g., "ValueError")
+	StackFrames []StackFrame `json:"stack_frames"` // Parsed stack trace
+	Details     []string     `json:"details"`      // Additional error details
+	Fields      []string     `json:"fields"`       // Validation error fields
 }
 
 // ParseStackTrace extracts stack frames from various stack trace formats

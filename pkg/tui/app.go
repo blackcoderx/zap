@@ -3,6 +3,7 @@ package tui
 import (
 	"os"
 	"strings"
+	"sync"
 
 	"github.com/atotto/clipboard"
 	"github.com/blackcoderx/zap/pkg/core"
@@ -53,35 +54,33 @@ type agentDoneMsg struct {
 	err error
 }
 
-// program reference for sending messages from goroutines
-var program *tea.Program
+// programRef holds the program reference for sending messages from goroutines.
+// Using a struct with mutex for thread-safe access instead of a bare global variable.
+type programRef struct {
+	mu      sync.RWMutex
+	program *tea.Program
+}
 
-func initialModel() model {
-	// Get config from viper
-	ollamaURL := viper.GetString("ollama_url")
-	if ollamaURL == "" {
-		ollamaURL = "https://ollama.com"
+func (p *programRef) Set(prog *tea.Program) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.program = prog
+}
+
+func (p *programRef) Send(msg tea.Msg) {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	if p.program != nil {
+		p.program.Send(msg)
 	}
+}
 
-	ollamaAPIKey := viper.GetString("ollama_api_key")
-	if ollamaAPIKey == "" {
-		ollamaAPIKey = viper.GetString("OLLAMA_API_KEY")
-	}
+// Global program reference with thread-safe accessors.
+// This is still a package-level variable but access is now synchronized.
+var globalProgram = &programRef{}
 
-	defaultModel := viper.GetString("default_model")
-	if defaultModel == "" {
-		defaultModel = "llama3"
-	}
-
-	// Get current working directory for codebase tools
-	workDir, _ := os.Getwd()
-
-	// Get .zap directory path
-	zapDir := core.ZapFolderName
-
-	client := llm.NewOllamaClient(ollamaURL, defaultModel, ollamaAPIKey)
-	agent := core.NewAgent(client)
-
+// registerTools adds all tools to the agent.
+func registerTools(agent *core.Agent, zapDir, workDir string) {
 	// Initialize shared components
 	responseManager := tools.NewResponseManager()
 	varStore := tools.NewVariableStore(zapDir)
@@ -122,6 +121,40 @@ func initialModel() model {
 	agent.RegisterTool(tools.NewPerformanceTool(httpTool, varStore))
 	agent.RegisterTool(tools.NewWebhookListenerTool(varStore))
 	agent.RegisterTool(tools.NewAuthOAuth2Tool(varStore))
+}
+
+// newLLMClient creates and configures the LLM client from Viper config.
+func newLLMClient() *llm.OllamaClient {
+	// Get config from viper
+	ollamaURL := viper.GetString("ollama_url")
+	if ollamaURL == "" {
+		ollamaURL = "https://ollama.com"
+	}
+
+	ollamaAPIKey := viper.GetString("ollama_api_key")
+	if ollamaAPIKey == "" {
+		ollamaAPIKey = viper.GetString("OLLAMA_API_KEY")
+	}
+
+	defaultModel := viper.GetString("default_model")
+	if defaultModel == "" {
+		defaultModel = "llama3"
+	}
+
+	return llm.NewOllamaClient(ollamaURL, defaultModel, ollamaAPIKey)
+}
+
+func initialModel() model {
+	// Get current working directory for codebase tools
+	workDir, _ := os.Getwd()
+
+	// Get .zap directory path
+	zapDir := core.ZapFolderName
+
+	client := newLLMClient()
+	agent := core.NewAgent(client)
+
+	registerTools(agent, zapDir, workDir)
 
 	// Create text input (single line, auto-wraps visually)
 	ti := textinput.New()
@@ -173,15 +206,11 @@ func runAgentAsync(agent *core.Agent, input string) tea.Cmd {
 		// Run agent in goroutine so we can send intermediate events
 		go func() {
 			callback := func(event core.AgentEvent) {
-				if program != nil {
-					program.Send(agentEventMsg{event: event})
-				}
+				globalProgram.Send(agentEventMsg{event: event})
 			}
 
 			_, err := agent.ProcessMessageWithEvents(input, callback)
-			if program != nil {
-				program.Send(agentDoneMsg{err: err})
-			}
+			globalProgram.Send(agentDoneMsg{err: err})
 		}()
 
 		// Return nil - actual results come via program.Send
@@ -532,11 +561,18 @@ func (m model) renderHelp() string {
 	return strings.Join(parts, "  ")
 }
 
-// Run starts the TUI application
+// Run starts the TUI application.
 func Run() error {
 	m := initialModel()
-	program = tea.NewProgram(m, tea.WithAltScreen(), tea.WithMouseCellMotion())
+	prog := tea.NewProgram(m, tea.WithAltScreen(), tea.WithMouseCellMotion())
 
-	_, err := program.Run()
+	// Store program reference for goroutines to send messages
+	globalProgram.Set(prog)
+
+	_, err := prog.Run()
+
+	// Clear program reference after run completes
+	globalProgram.Set(nil)
+
 	return err
 }

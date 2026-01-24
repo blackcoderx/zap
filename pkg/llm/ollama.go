@@ -1,3 +1,5 @@
+// Package llm provides client implementations for Large Language Models,
+// specifically focusing on Ollama integration for local AI inference.
 package llm
 
 import (

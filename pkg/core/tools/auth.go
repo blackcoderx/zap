@@ -163,8 +163,8 @@ func NewAuthHelperTool(responseManager *ResponseManager, varStore *VariableStore
 
 // AuthHelperParams defines auth helper parameters
 type AuthHelperParams struct {
-	Action   string `json:"action"`             // "parse_jwt", "decode_basic"
-	Token    string `json:"token,omitempty"`    // Token to parse
+	Action   string `json:"action"`              // "parse_jwt", "decode_basic"
+	Token    string `json:"token,omitempty"`     // Token to parse
 	FromBody string `json:"from_body,omitempty"` // Extract from response body field
 }
 
@@ -288,10 +288,16 @@ func (t *AuthHelperTool) decodeBasic(authHeader string) (string, error) {
 	return fmt.Sprintf("Basic Auth Decoded:\nUsername: %s\nPassword: %s", parts[0], parts[1]), nil
 }
 
-// base64DecodeJWTPart decodes a JWT part with URL-safe base64
+// base64DecodeJWTPart decodes a JWT part with URL-safe base64.
+// JWT tokens use URL-safe base64 encoding without padding.
 func base64DecodeJWTPart(part string) (string, error) {
-	// JWT uses URL-safe base64 without padding
-	// Add padding if needed
+	// First try RawURLEncoding (no padding, which is standard for JWT)
+	decoded, err := base64.RawURLEncoding.DecodeString(part)
+	if err == nil {
+		return string(decoded), nil
+	}
+
+	// If that fails, try with padding added (some encoders add padding)
 	switch len(part) % 4 {
 	case 2:
 		part += "=="
@@ -299,9 +305,9 @@ func base64DecodeJWTPart(part string) (string, error) {
 		part += "="
 	}
 
-	decoded, err := base64.RawURLEncoding.DecodeString(part)
+	decoded, err = base64.URLEncoding.DecodeString(part)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to decode JWT part: %w", err)
 	}
 
 	return string(decoded), nil

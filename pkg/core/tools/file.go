@@ -62,8 +62,20 @@ func (t *ReadFileTool) Execute(args string) (string, error) {
 		return "", fmt.Errorf("invalid path: %w", err)
 	}
 
-	absWorkDir, _ := filepath.Abs(t.workDir)
-	if !strings.HasPrefix(absPath, absWorkDir) {
+	absWorkDir, err := filepath.Abs(t.workDir)
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve work directory: %w", err)
+	}
+
+	// Ensure work directory ends with separator for proper prefix matching
+	// This prevents bypasses like /project-evil matching /project
+	if !strings.HasSuffix(absWorkDir, string(filepath.Separator)) {
+		absWorkDir += string(filepath.Separator)
+	}
+
+	// Check if path is within work directory (or equals it)
+	if absPath != strings.TrimSuffix(absWorkDir, string(filepath.Separator)) &&
+		!strings.HasPrefix(absPath, absWorkDir) {
 		return "", fmt.Errorf("access denied: path outside project directory")
 	}
 
@@ -134,14 +146,25 @@ func (t *ListFilesTool) Execute(args string) (string, error) {
 		searchPath = filepath.Join(t.workDir, searchPath)
 	}
 
-	// Security check
+	// Security check: ensure path is within work directory
 	absPath, err := filepath.Abs(searchPath)
 	if err != nil {
 		return "", fmt.Errorf("invalid path: %w", err)
 	}
 
-	absWorkDir, _ := filepath.Abs(t.workDir)
-	if !strings.HasPrefix(absPath, absWorkDir) {
+	absWorkDir, err := filepath.Abs(t.workDir)
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve work directory: %w", err)
+	}
+
+	// Ensure work directory ends with separator for proper prefix matching
+	if !strings.HasSuffix(absWorkDir, string(filepath.Separator)) {
+		absWorkDir += string(filepath.Separator)
+	}
+
+	// Check if path is within work directory (or equals it)
+	if absPath != strings.TrimSuffix(absWorkDir, string(filepath.Separator)) &&
+		!strings.HasPrefix(absPath, absWorkDir) {
 		return "", fmt.Errorf("access denied: path outside project directory")
 	}
 

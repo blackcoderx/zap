@@ -33,18 +33,18 @@ func NewTestSuiteTool(httpTool *HTTPTool, assertTool *AssertTool, extractTool *E
 
 // TestDefinition defines a single test in a suite
 type TestDefinition struct {
-	Name       string                 `json:"name"`
-	Request    HTTPRequest            `json:"request"`
-	Assertions *AssertParams          `json:"assertions,omitempty"`
-	Extract    map[string]string      `json:"extract,omitempty"` // var_name -> json_path
+	Name       string            `json:"name"`
+	Request    HTTPRequest       `json:"request"`
+	Assertions *AssertParams     `json:"assertions,omitempty"`
+	Extract    map[string]string `json:"extract,omitempty"` // var_name -> json_path
 }
 
 // TestSuiteParams defines a test suite
 type TestSuiteParams struct {
-	Name      string           `json:"name"`
-	Tests     []TestDefinition `json:"tests"`
-	OnFailure string           `json:"on_failure,omitempty"` // "stop" or "continue"
-	SaveResults bool           `json:"save_results,omitempty"` // Save to .zap/test-results/
+	Name        string           `json:"name"`
+	Tests       []TestDefinition `json:"tests"`
+	OnFailure   string           `json:"on_failure,omitempty"`   // "stop" or "continue"
+	SaveResults bool             `json:"save_results,omitempty"` // Save to .zap/test-results/
 }
 
 // TestResult represents the result of a single test
@@ -58,14 +58,14 @@ type TestResult struct {
 
 // SuiteResult represents the result of an entire suite
 type SuiteResult struct {
-	Name       string       `json:"name"`
-	StartTime  time.Time    `json:"start_time"`
-	EndTime    time.Time    `json:"end_time"`
+	Name       string        `json:"name"`
+	StartTime  time.Time     `json:"start_time"`
+	EndTime    time.Time     `json:"end_time"`
 	Duration   time.Duration `json:"duration"`
-	TotalTests int          `json:"total_tests"`
-	Passed     int          `json:"passed"`
-	Failed     int          `json:"failed"`
-	Tests      []TestResult `json:"tests"`
+	TotalTests int           `json:"total_tests"`
+	Passed     int           `json:"passed"`
+	Failed     int           `json:"failed"`
+	Tests      []TestResult  `json:"tests"`
 }
 
 // Name returns the tool name
@@ -306,7 +306,7 @@ func (t *TestSuiteTool) saveResults(result SuiteResult) error {
 	safeName := strings.ReplaceAll(result.Name, " ", "-")
 	safeName = strings.ToLower(safeName)
 	filename := fmt.Sprintf("%s-%s.json", safeName, timestamp)
-	filepath := filepath.Join(resultsDir, filename)
+	resultPath := filepath.Join(resultsDir, filename)
 
 	// Marshal results
 	data, err := json.MarshalIndent(result, "", "  ")
@@ -315,5 +315,5 @@ func (t *TestSuiteTool) saveResults(result SuiteResult) error {
 	}
 
 	// Write to file
-	return os.WriteFile(filepath, data, 0644)
+	return os.WriteFile(resultPath, data, 0644)
 }
