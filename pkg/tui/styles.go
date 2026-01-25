@@ -6,9 +6,10 @@ import (
 
 // Minimal color palette
 var (
+	// USER: Adjust these colors to change the theme
 	DimColor     = lipgloss.Color("#6c6c6c")
 	TextColor    = lipgloss.Color("#e0e0e0")
-	AccentColor  = lipgloss.Color("#7aa2f7")
+	AccentColor  = lipgloss.Color("#7aa2f7") // The blue cursor/spinner color
 	ErrorColor   = lipgloss.Color("#f7768e")
 	ToolColor    = lipgloss.Color("#9ece6a")
 	MutedColor   = lipgloss.Color("#545454")
@@ -70,6 +71,19 @@ var (
 
 	ShortcutDescStyle = lipgloss.NewStyle().
 				Foreground(DimColor)
+
+	// Footer specific styles (OpenCode style)
+	FooterAppNameStyle = lipgloss.NewStyle().
+				Foreground(AccentColor).
+				Bold(true).
+				PaddingRight(1)
+
+	FooterModelStyle = lipgloss.NewStyle().
+				Foreground(TextColor).
+				PaddingRight(1)
+
+	FooterInfoStyle = lipgloss.NewStyle().
+			Foreground(DimColor)
 )
 
 // OpenCode-style message block styles
@@ -81,12 +95,11 @@ var (
 				BorderForeground(AccentColor).
 				BorderLeft(true).
 				BorderTop(false).
-				BorderRight(false).
+				BorderRight(true).
 				BorderBottom(false).
-				PaddingLeft(1).
-				PaddingRight(1).
-				MarginTop(1).
-				MarginBottom(1)
+				Padding(1, 1, 1, 1).
+				Margin(1, 1, 1, 1).
+				Width(80)
 
 	// Tool calls: dimmed with circle prefix
 	ToolCallStyle = lipgloss.NewStyle().
@@ -97,21 +110,24 @@ var (
 				Foreground(TextColor)
 
 	// Input area: matches user message style
+	// USER: This controls the input box style (where you type)
+	// Input area: matches user message style
 	InputAreaStyle = lipgloss.NewStyle().
 			Background(InputAreaBg).
 			BorderStyle(lipgloss.ThickBorder()).
 			BorderForeground(AccentColor).
-			BorderLeft(true).
+			BorderLeft(true). // The blue vertical bar on the left
 			BorderTop(false).
-			BorderRight(false).
+			BorderRight(true).
 			BorderBottom(false).
-			PaddingLeft(1)
+			Padding(1, 2).
+			Margin(1, 1, 1, 1) // USER: Set to 0 to remove spacing around the input box
 
-	// Footer bar
+	// USER: This controls the footer bar style (bottom row)
 	FooterStyle = lipgloss.NewStyle().
 			Background(FooterBg).
 			Foreground(DimColor).
-			Padding(0, 1)
+			Padding(0, 0) // USER: Padding inside the footer bar
 
 	// Model badge
 	ModelBadgeStyle = lipgloss.NewStyle().
@@ -122,7 +138,7 @@ var (
 
 // Log prefixes (Claude Code style - kept for compatibility)
 const (
-	UserPrefix        = "> "
+	// UserPrefix        = "> "
 	ThinkingPrefix    = "  thinking "
 	ToolPrefix        = "  tool "
 	ObservationPrefix = "  result "
