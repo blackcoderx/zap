@@ -21,8 +21,19 @@ type Tool interface {
 
 // AgentEvent represents a state change during agent processing
 type AgentEvent struct {
-	Type    string // "thinking", "tool_call", "observation", "answer", "error", "streaming"
-	Content string
+	Type       string // "thinking", "tool_call", "observation", "answer", "error", "streaming", "tool_usage"
+	Content    string
+	ToolUsage  *ToolUsageEvent // Present only for "tool_usage" events
+}
+
+// ToolUsageEvent contains tool usage statistics for display
+type ToolUsageEvent struct {
+	ToolName    string           // Current tool being called (empty if just stats update)
+	ToolCurrent int              // Current calls for this tool
+	ToolLimit   int              // Limit for this tool
+	TotalCalls  int              // Total calls across all tools
+	TotalLimit  int              // Total limit
+	AllStats    []ToolUsageStats // All tool usage stats
 }
 
 // EventCallback is called when the agent emits an event
@@ -35,6 +46,13 @@ type Agent struct {
 	toolsMu      sync.RWMutex // Protects access to tools map
 	history      []llm.Message
 	lastResponse interface{} // Store last tool response for chaining
+
+	// Per-tool call limiting
+	toolLimits   map[string]int // max calls per tool per session
+	toolCounts   map[string]int // current session call counts
+	defaultLimit int            // fallback limit for tools without specific limit
+	totalLimit   int            // safety cap on total tool calls per session
+	totalCalls   int            // current total tool calls in session
 }
 
 // NewAgent creates a new ZAP agent
@@ -44,6 +62,11 @@ func NewAgent(llmClient *llm.OllamaClient) *Agent {
 		tools:        make(map[string]Tool),
 		history:      []llm.Message{},
 		lastResponse: nil,
+		toolLimits:   make(map[string]int),
+		toolCounts:   make(map[string]int),
+		defaultLimit: 50,  // Default: 50 calls per tool
+		totalLimit:   200, // Safety cap: 200 total calls per session
+		totalCalls:   0,
 	}
 }
 
@@ -72,6 +95,79 @@ func (a *Agent) SetLastResponse(response interface{}) {
 	a.lastResponse = response
 }
 
+// SetToolLimit sets the maximum number of calls allowed for a specific tool per session
+func (a *Agent) SetToolLimit(toolName string, limit int) {
+	a.toolLimits[toolName] = limit
+}
+
+// SetDefaultLimit sets the fallback limit for tools without a specific limit
+func (a *Agent) SetDefaultLimit(limit int) {
+	a.defaultLimit = limit
+}
+
+// SetTotalLimit sets the safety cap on total tool calls per session
+func (a *Agent) SetTotalLimit(limit int) {
+	a.totalLimit = limit
+}
+
+// ResetToolCounts resets all tool call counters (called at start of each message)
+func (a *Agent) ResetToolCounts() {
+	a.toolCounts = make(map[string]int)
+	a.totalCalls = 0
+}
+
+// getToolLimit returns the limit for a specific tool, or the default if not set
+func (a *Agent) getToolLimit(toolName string) int {
+	if limit, ok := a.toolLimits[toolName]; ok {
+		return limit
+	}
+	return a.defaultLimit
+}
+
+// isToolLimitReached checks if a tool has reached its call limit
+func (a *Agent) isToolLimitReached(toolName string) bool {
+	return a.toolCounts[toolName] >= a.getToolLimit(toolName)
+}
+
+// isTotalLimitReached checks if the total call limit has been reached
+func (a *Agent) isTotalLimitReached() bool {
+	return a.totalCalls >= a.totalLimit
+}
+
+// ToolUsageStats represents the usage statistics for a single tool
+type ToolUsageStats struct {
+	Name    string
+	Current int
+	Limit   int
+	Percent int // 0-100
+}
+
+// GetToolUsageStats returns current tool usage statistics
+func (a *Agent) GetToolUsageStats() (stats []ToolUsageStats, totalCalls, totalLimit int) {
+	// Get all tools that have been used
+	for toolName, count := range a.toolCounts {
+		if count > 0 {
+			limit := a.getToolLimit(toolName)
+			percent := (count * 100) / limit
+			if percent > 100 {
+				percent = 100
+			}
+			stats = append(stats, ToolUsageStats{
+				Name:    toolName,
+				Current: count,
+				Limit:   limit,
+				Percent: percent,
+			})
+		}
+	}
+	return stats, a.totalCalls, a.totalLimit
+}
+
+// GetTotalUsage returns total calls and limit
+func (a *Agent) GetTotalUsage() (current, limit int) {
+	return a.totalCalls, a.totalLimit
+}
+
 // ProcessMessage handles a user message using ReAct logic
 func (a *Agent) ProcessMessage(input string) (string, error) {
 	fmt.Fprintf(os.Stderr, "AGENT: Processing user input: %s\n", input)
@@ -79,11 +175,18 @@ func (a *Agent) ProcessMessage(input string) (string, error) {
 	// Add user message to history
 	a.history = append(a.history, llm.Message{Role: "user", Content: input})
 
-	// Max iterations to prevent infinite loops
-	maxIterations := 5
+	// Reset tool call counters for this session
+	a.ResetToolCounts()
 
-	for i := 0; i < maxIterations; i++ {
-		fmt.Fprintf(os.Stderr, "AGENT: Iteration %d\n", i)
+	for {
+		fmt.Fprintf(os.Stderr, "AGENT: Total tool calls: %d\n", a.totalCalls)
+
+		// Check total limit safety cap
+		if a.isTotalLimitReached() {
+			msg := fmt.Sprintf("I reached the maximum total tool calls (%d). Stopping to prevent runaway execution.", a.totalLimit)
+			fmt.Fprintf(os.Stderr, "AGENT: %s\n", msg)
+			return msg, nil
+		}
 
 		// Prepare system prompt with tool descriptions
 		systemPrompt := a.buildSystemPrompt()
@@ -126,8 +229,21 @@ func (a *Agent) ProcessMessage(input string) (string, error) {
 				continue
 			}
 
-			// Execute tool
+			// Check per-tool limit
+			if a.isToolLimitReached(toolName) {
+				limit := a.getToolLimit(toolName)
+				observation := fmt.Sprintf("Tool '%s' has reached its limit (%d calls). Use other tools or provide a final answer.", toolName, limit)
+				fmt.Fprintf(os.Stderr, "AGENT: %s\n", observation)
+				a.history = append(a.history, llm.Message{Role: "assistant", Content: response})
+				a.history = append(a.history, llm.Message{Role: "user", Content: fmt.Sprintf("Observation: %s", observation)})
+				continue
+			}
+
+			// Execute tool and increment counters
 			fmt.Fprintf(os.Stderr, "AGENT: Executing tool %s with args %s\n", toolName, toolArgs)
+			a.toolCounts[toolName]++
+			a.totalCalls++
+
 			observation, err := tool.Execute(toolArgs)
 			if err != nil {
 				observation = fmt.Sprintf("Error executing tool: %v", err)
@@ -144,8 +260,6 @@ func (a *Agent) ProcessMessage(input string) (string, error) {
 		a.history = append(a.history, llm.Message{Role: "assistant", Content: response})
 		return finalAnswer, nil
 	}
-
-	return "I reached the maximum number of steps without finding a final answer. Result: " + input, nil
 }
 
 // ProcessMessageWithEvents handles a user message and emits events for each stage
@@ -153,12 +267,19 @@ func (a *Agent) ProcessMessageWithEvents(input string, callback EventCallback) (
 	// Add user message to history
 	a.history = append(a.history, llm.Message{Role: "user", Content: input})
 
-	// Max iterations to prevent infinite loops
-	maxIterations := 5
+	// Reset tool call counters for this session
+	a.ResetToolCounts()
 
-	for i := 0; i < maxIterations; i++ {
+	for {
+		// Check total limit safety cap
+		if a.isTotalLimitReached() {
+			msg := fmt.Sprintf("I reached the maximum total tool calls (%d). Stopping to prevent runaway execution.", a.totalLimit)
+			callback(AgentEvent{Type: "error", Content: msg})
+			return msg, nil
+		}
+
 		// Emit thinking event
-		callback(AgentEvent{Type: "thinking", Content: fmt.Sprintf("reasoning (step %d)...", i+1)})
+		callback(AgentEvent{Type: "thinking", Content: fmt.Sprintf("reasoning (calls: %d)...", a.totalCalls)})
 
 		// Prepare system prompt with tool descriptions
 		systemPrompt := a.buildSystemPrompt()
@@ -217,8 +338,23 @@ func (a *Agent) ProcessMessageWithEvents(input string, callback EventCallback) (
 				continue
 			}
 
+			// Check per-tool limit
+			if a.isToolLimitReached(toolName) {
+				limit := a.getToolLimit(toolName)
+				observation := fmt.Sprintf("Tool '%s' has reached its limit (%d calls). Use other tools or provide a final answer.", toolName, limit)
+				callback(AgentEvent{Type: "error", Content: fmt.Sprintf("Tool '%s' limit reached (%d calls)", toolName, limit)})
+
+				a.history = append(a.history, llm.Message{Role: "assistant", Content: response})
+				a.history = append(a.history, llm.Message{Role: "user", Content: fmt.Sprintf("Observation: %s", observation)})
+				continue
+			}
+
 			// Emit tool call event
 			callback(AgentEvent{Type: "tool_call", Content: toolName})
+
+			// Increment counters before execution
+			a.toolCounts[toolName]++
+			a.totalCalls++
 
 			// Execute tool
 			observation, err := tool.Execute(toolArgs)
@@ -229,6 +365,20 @@ func (a *Agent) ProcessMessageWithEvents(input string, callback EventCallback) (
 
 			// Emit observation event
 			callback(AgentEvent{Type: "observation", Content: observation})
+
+			// Emit tool usage event for TUI display
+			stats, totalCalls, totalLimit := a.GetToolUsageStats()
+			callback(AgentEvent{
+				Type: "tool_usage",
+				ToolUsage: &ToolUsageEvent{
+					ToolName:    toolName,
+					ToolCurrent: a.toolCounts[toolName],
+					ToolLimit:   a.getToolLimit(toolName),
+					TotalCalls:  totalCalls,
+					TotalLimit:  totalLimit,
+					AllStats:    stats,
+				},
+			})
 
 			// Add interaction to history
 			a.history = append(a.history, llm.Message{Role: "assistant", Content: response})
@@ -241,10 +391,6 @@ func (a *Agent) ProcessMessageWithEvents(input string, callback EventCallback) (
 		callback(AgentEvent{Type: "answer", Content: finalAnswer})
 		return finalAnswer, nil
 	}
-
-	msg := "I stopped because I reached the maximum number of steps (5). This usually means I got stuck in a loop or the task is too complex.\nTip: Try breaking your request into smaller steps."
-	callback(AgentEvent{Type: "error", Content: msg})
-	return msg, nil
 }
 
 func (a *Agent) buildSystemPrompt() string {

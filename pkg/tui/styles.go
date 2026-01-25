@@ -14,6 +14,7 @@ var (
 	ToolColor    = lipgloss.Color("#9ece6a")
 	MutedColor   = lipgloss.Color("#545454")
 	SuccessColor = lipgloss.Color("#73daca")
+	WarningColor = lipgloss.Color("#e0af68") // Yellow/orange for warnings
 
 	// OpenCode-style colors
 	UserMessageBg = lipgloss.Color("#2a2a2a") // Gray background for user messages
@@ -146,4 +147,27 @@ const (
 
 	// OpenCode-style prefix
 	ToolCallPrefix = "○ " // Circle prefix for tool calls
+)
+
+// Tool usage display styles
+var (
+	// Normal usage (green)
+	ToolUsageNormalStyle = lipgloss.NewStyle().
+				Foreground(ToolColor)
+
+	// Warning usage (70-89% - yellow)
+	ToolUsageWarningStyle = lipgloss.NewStyle().
+				Foreground(WarningColor)
+
+	// Critical usage (90%+ - red)
+	ToolUsageCriticalStyle = lipgloss.NewStyle().
+				Foreground(ErrorColor)
+
+	// Tool name in usage display
+	ToolUsageNameStyle = lipgloss.NewStyle().
+				Foreground(DimColor)
+
+	// Total usage style
+	TotalUsageStyle = lipgloss.NewStyle().
+			Foreground(AccentColor)
 )

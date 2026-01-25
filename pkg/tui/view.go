@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
@@ -136,8 +137,12 @@ func (m Model) renderFooter() string {
 
 	// Left Side: Status or Model Info
 	if m.thinking {
-		// Active state: dots + interrupt hint
-		left = m.spinner.View() + " " + ShortcutKeyStyle.Render("esc") + ShortcutDescStyle.Render(" interrupt")
+		// Active state: show tool usage if available
+		if m.totalCalls > 0 {
+			left = m.spinner.View() + " " + m.renderToolUsage()
+		} else {
+			left = m.spinner.View() + " " + ShortcutKeyStyle.Render("esc") + ShortcutDescStyle.Render(" interrupt")
+		}
 	} else {
 		// Idle state: Zap [Model] Console
 		left = FooterAppNameStyle.Render("Zap") + FooterModelStyle.Render(m.modelName) + FooterInfoStyle.Render("Console")
@@ -145,7 +150,10 @@ func (m Model) renderFooter() string {
 
 	// Right Side: Hints
 	var parts []string
-	if !m.thinking {
+	if m.thinking {
+		// Show total usage and interrupt hint when thinking
+		parts = append(parts, ShortcutKeyStyle.Render("esc")+ShortcutDescStyle.Render(" interrupt"))
+	} else {
 		parts = append(parts, ShortcutKeyStyle.Render("↑↓")+ShortcutDescStyle.Render(" history"))
 	}
 	parts = append(parts, ShortcutKeyStyle.Render("ctrl+l")+ShortcutDescStyle.Render(" clear"))
@@ -162,6 +170,49 @@ func (m Model) renderFooter() string {
 	}
 
 	return FooterStyle.Width(m.width).Render(left + strings.Repeat(" ", gap) + right)
+}
+
+// renderToolUsage renders the current tool usage statistics
+func (m Model) renderToolUsage() string {
+	var parts []string
+
+	// Show last tool usage with color coding
+	if m.lastToolName != "" && m.lastToolLimit > 0 {
+		percent := (m.lastToolCount * 100) / m.lastToolLimit
+		usageStr := fmt.Sprintf("%s:%d/%d", m.lastToolName, m.lastToolCount, m.lastToolLimit)
+
+		var styled string
+		if percent >= 90 {
+			styled = ToolUsageCriticalStyle.Render(usageStr)
+		} else if percent >= 70 {
+			styled = ToolUsageWarningStyle.Render(usageStr)
+		} else {
+			styled = ToolUsageNormalStyle.Render(usageStr)
+		}
+		parts = append(parts, styled)
+	}
+
+	// Show total usage
+	if m.totalLimit > 0 {
+		totalPercent := (m.totalCalls * 100) / m.totalLimit
+		totalStr := fmt.Sprintf("total:%d/%d", m.totalCalls, m.totalLimit)
+
+		var styled string
+		if totalPercent >= 90 {
+			styled = ToolUsageCriticalStyle.Render(totalStr)
+		} else if totalPercent >= 70 {
+			styled = ToolUsageWarningStyle.Render(totalStr)
+		} else {
+			styled = TotalUsageStyle.Render(totalStr)
+		}
+		parts = append(parts, styled)
+	}
+
+	if len(parts) == 0 {
+		return ShortcutDescStyle.Render("working...")
+	}
+
+	return strings.Join(parts, " ")
 }
 
 // lipglossWidth calculates the width of a styled string.

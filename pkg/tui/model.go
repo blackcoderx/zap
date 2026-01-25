@@ -17,6 +17,14 @@ type logEntry struct {
 	Content string
 }
 
+// ToolUsageDisplay represents tool usage for TUI display
+type ToolUsageDisplay struct {
+	Name    string
+	Current int
+	Limit   int
+	Percent int
+}
+
 // Model is the Bubble Tea model for the ZAP TUI.
 // It manages the state of the terminal interface including:
 // - viewport for scrollable message history
@@ -41,6 +49,14 @@ type Model struct {
 	currentTool     string   // name of tool currently being executed
 	streamingBuffer string   // buffer for accumulating streaming content
 	modelName       string   // current LLM model name for badge display
+
+	// Tool usage tracking for display
+	toolUsage      []ToolUsageDisplay // Current tool usage stats
+	totalCalls     int                // Total tool calls in session
+	totalLimit     int                // Total limit
+	lastToolName   string             // Last tool that was called
+	lastToolCount  int                // Last tool's current count
+	lastToolLimit  int                // Last tool's limit
 }
 
 // agentEventMsg wraps an agent event for the TUI

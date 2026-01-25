@@ -9,12 +9,20 @@ import (
 
 const ZapFolderName = ".zap"
 
+// ToolLimitsConfig holds per-tool call limits configuration
+type ToolLimitsConfig struct {
+	DefaultLimit int            `json:"default_limit"` // Fallback limit for tools without specific limit
+	TotalLimit   int            `json:"total_limit"`   // Safety cap on total tool calls per session
+	PerTool      map[string]int `json:"per_tool"`      // Per-tool limits (tool_name -> max_calls)
+}
+
 // Config represents the user's ZAP configuration
 type Config struct {
-	OllamaURL    string `json:"ollama_url"`
-	OllamaAPIKey string `json:"ollama_api_key"`
-	DefaultModel string `json:"default_model"`
-	Theme        string `json:"theme"`
+	OllamaURL    string           `json:"ollama_url"`
+	OllamaAPIKey string           `json:"ollama_api_key"`
+	DefaultModel string           `json:"default_model"`
+	Theme        string           `json:"theme"`
+	ToolLimits   ToolLimitsConfig `json:"tool_limits"`
 }
 
 // InitializeZapFolder creates the .zap directory and initializes default files if they don't exist
@@ -96,6 +104,36 @@ func createDefaultConfig() error {
 		OllamaAPIKey: "", // To be filled by user
 		DefaultModel: "qwen3-coder:480b-cloud",
 		Theme:        "dark",
+		ToolLimits: ToolLimitsConfig{
+			DefaultLimit: 50,  // Default: 50 calls per tool
+			TotalLimit:   200, // Safety cap: 200 total calls per session
+			PerTool: map[string]int{
+				// High-risk tools (external I/O)
+				"http_request":     25,
+				"performance_test": 5,
+				"webhook_listener": 10,
+				"auth_oauth2":      10,
+				// Medium-risk tools (file system)
+				"read_file":    50,
+				"list_files":   50,
+				"search_code":  30,
+				"save_request": 20,
+				"load_request": 30,
+				// Low-risk tools (in-memory)
+				"variable":             100,
+				"assert_response":      100,
+				"extract_value":        100,
+				"auth_bearer":          50,
+				"auth_basic":           50,
+				"auth_helper":          50,
+				"validate_json_schema": 50,
+				"compare_responses":    30,
+				// Special tools
+				"retry":      15,
+				"wait":       20,
+				"test_suite": 10,
+			},
+		},
 	}
 
 	data, err := json.MarshalIndent(config, "", "  ")

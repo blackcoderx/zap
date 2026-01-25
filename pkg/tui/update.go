@@ -155,6 +155,27 @@ func (m Model) handleAgentEvent(msg agentEventMsg) Model {
 		m.logs = append(m.logs, logEntry{Type: "error", Content: msg.event.Content})
 		m.streamingBuffer = ""
 		m.status = "idle"
+
+	case "tool_usage":
+		if msg.event.ToolUsage != nil {
+			usage := msg.event.ToolUsage
+			m.totalCalls = usage.TotalCalls
+			m.totalLimit = usage.TotalLimit
+			m.lastToolName = usage.ToolName
+			m.lastToolCount = usage.ToolCurrent
+			m.lastToolLimit = usage.ToolLimit
+
+			// Convert stats to display format
+			m.toolUsage = make([]ToolUsageDisplay, len(usage.AllStats))
+			for i, stat := range usage.AllStats {
+				m.toolUsage[i] = ToolUsageDisplay{
+					Name:    stat.Name,
+					Current: stat.Current,
+					Limit:   stat.Limit,
+					Percent: stat.Percent,
+				}
+			}
+		}
 	}
 
 	m.updateViewportContent()
@@ -166,6 +187,15 @@ func (m Model) handleAgentDone(msg agentDoneMsg) Model {
 	m.thinking = false
 	m.status = "idle"
 	m.currentTool = ""
+
+	// Reset tool usage display
+	m.toolUsage = nil
+	m.totalCalls = 0
+	m.totalLimit = 0
+	m.lastToolName = ""
+	m.lastToolCount = 0
+	m.lastToolLimit = 0
+
 	if msg.err != nil {
 		m.logs = append(m.logs, logEntry{Type: "error", Content: msg.err.Error()})
 	}

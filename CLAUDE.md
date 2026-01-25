@@ -81,13 +81,36 @@ type Tool interface {
 ### Configuration
 
 On first run, creates `.zap/` folder containing:
-- `config.json` - Ollama URL, model settings
+- `config.json` - Ollama URL, model settings, tool limits
 - `history.jsonl` - Conversation log
 - `memory.json` - Agent memory
 - `requests/` - Saved API requests (YAML files)
 - `environments/` - Environment configs (dev.yaml, prod.yaml, etc.)
 
 Environment: `OLLAMA_API_KEY` loaded from `.env` file.
+
+#### Tool Limits Configuration
+
+The agent uses per-tool call limits instead of a global iteration limit. This allows complex workflows while preventing runaway execution. Configure in `config.json`:
+
+```json
+{
+  "tool_limits": {
+    "default_limit": 50,
+    "total_limit": 200,
+    "per_tool": {
+      "http_request": 25,
+      "read_file": 50,
+      "search_code": 30,
+      "variable": 100
+    }
+  }
+}
+```
+
+- `default_limit` - Fallback limit for tools without specific limit (default: 50)
+- `total_limit` - Safety cap on total tool calls per session (default: 200)
+- `per_tool` - Per-tool limits by name (overrides defaults)
 
 ### Request Persistence
 

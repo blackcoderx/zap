@@ -15,6 +15,78 @@ import (
 	"github.com/spf13/viper"
 )
 
+// configureToolLimits sets up per-tool call limits from config file.
+// Falls back to sensible defaults if config values are missing.
+// High-risk tools (network I/O, side effects) have lower limits.
+// Low-risk tools (in-memory, no side effects) have higher limits.
+func configureToolLimits(agent *core.Agent) {
+	// Default limits (used if config doesn't specify)
+	defaultLimits := map[string]int{
+		// High-risk tools (external I/O, side effects)
+		"http_request":     25,
+		"performance_test": 5,
+		"webhook_listener": 10,
+		"auth_oauth2":      10,
+		// Medium-risk tools (file system I/O)
+		"read_file":    50,
+		"list_files":   50,
+		"search_code":  30,
+		"save_request": 20,
+		"load_request": 30,
+		// Low-risk tools (in-memory, fast)
+		"variable":             100,
+		"assert_response":      100,
+		"extract_value":        100,
+		"auth_bearer":          50,
+		"auth_basic":           50,
+		"auth_helper":          50,
+		"validate_json_schema": 50,
+		"compare_responses":    30,
+		// Special tools (prevent infinite loops)
+		"retry":      15,
+		"wait":       20,
+		"test_suite": 10,
+	}
+
+	// Set global limits from config (with defaults)
+	defaultLimit := viper.GetInt("tool_limits.default_limit")
+	if defaultLimit <= 0 {
+		defaultLimit = 50
+	}
+	agent.SetDefaultLimit(defaultLimit)
+
+	totalLimit := viper.GetInt("tool_limits.total_limit")
+	if totalLimit <= 0 {
+		totalLimit = 200
+	}
+	agent.SetTotalLimit(totalLimit)
+
+	// Apply default per-tool limits first
+	for toolName, limit := range defaultLimits {
+		agent.SetToolLimit(toolName, limit)
+	}
+
+	// Override with config values if present
+	perToolConfig := viper.GetStringMap("tool_limits.per_tool")
+	for toolName, limitVal := range perToolConfig {
+		// viper returns interface{}, need to convert to int
+		var limit int
+		switch v := limitVal.(type) {
+		case int:
+			limit = v
+		case int64:
+			limit = int(v)
+		case float64:
+			limit = int(v)
+		default:
+			continue // Skip invalid values
+		}
+		if limit > 0 {
+			agent.SetToolLimit(toolName, limit)
+		}
+	}
+}
+
 // registerTools adds all tools to the agent.
 // This includes codebase tools, persistence tools, and testing tools from all sprints.
 func registerTools(agent *core.Agent, zapDir, workDir string) {
@@ -180,6 +252,9 @@ func InitialModel() Model {
 
 	client := newLLMClient()
 	agent := core.NewAgent(client)
+
+	// Configure per-tool call limits before registering tools
+	configureToolLimits(agent)
 
 	registerTools(agent, zapDir, workDir)
 
