@@ -10,8 +10,17 @@ import (
 // handleKeyMsg processes keyboard input and returns the updated model and command.
 // This centralizes all key handling logic for the TUI.
 func (m Model) handleKeyMsg(msg tea.KeyMsg) (Model, tea.Cmd) {
+	// Handle confirmation mode first (takes priority)
+	if m.confirmationMode {
+		return m.handleConfirmationKeys(msg)
+	}
+
 	switch msg.String() {
 	case "ctrl+c", "esc":
+		// Cancel any pending confirmation when quitting
+		if m.confirmManager != nil {
+			m.confirmManager.Cancel()
+		}
 		return m, tea.Quit
 
 	case "ctrl+l":
@@ -148,4 +157,54 @@ func (m Model) handleViewportScroll(msg tea.KeyMsg) (Model, tea.Cmd) {
 	var cmd tea.Cmd
 	m.viewport, cmd = m.viewport.Update(msg)
 	return m, cmd
+}
+
+// handleConfirmationKeys processes keyboard input during file write confirmation.
+func (m Model) handleConfirmationKeys(msg tea.KeyMsg) (Model, tea.Cmd) {
+	switch msg.String() {
+	case "y", "Y":
+		// Approve the file change
+		if m.confirmManager != nil {
+			m.confirmManager.SendResponse(true)
+		}
+		m.confirmationMode = false
+		m.logs = append(m.logs, logEntry{Type: "user", Content: "Approved file change"})
+		m.pendingConfirmation = nil
+		m.updateViewportContent()
+		return m, nil
+
+	case "n", "N":
+		// Reject the file change
+		if m.confirmManager != nil {
+			m.confirmManager.SendResponse(false)
+		}
+		m.confirmationMode = false
+		m.logs = append(m.logs, logEntry{Type: "error", Content: "Rejected file change"})
+		m.pendingConfirmation = nil
+		m.updateViewportContent()
+		return m, nil
+
+	case "esc", "ctrl+c":
+		// Cancel = reject, but also quit on ctrl+c
+		if m.confirmManager != nil {
+			m.confirmManager.SendResponse(false)
+		}
+		m.confirmationMode = false
+		m.pendingConfirmation = nil
+		if msg.String() == "ctrl+c" {
+			return m, tea.Quit
+		}
+		m.logs = append(m.logs, logEntry{Type: "error", Content: "Rejected file change"})
+		m.updateViewportContent()
+		return m, nil
+
+	case "pgup", "pgdown", "home", "end":
+		// Allow scrolling in confirmation mode to view the diff
+		var cmd tea.Cmd
+		m.viewport, cmd = m.viewport.Update(msg)
+		return m, cmd
+	}
+
+	// Ignore other keys in confirmation mode
+	return m, nil
 }

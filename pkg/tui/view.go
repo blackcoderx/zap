@@ -35,10 +35,15 @@ func (m Model) View() string {
 func (m *Model) updateViewportContent() {
 	var content strings.Builder
 
-	for _, entry := range m.logs {
-		line := m.formatLogEntry(entry)
-		content.WriteString(line)
-		content.WriteString("\n")
+	// In confirmation mode, show the diff view
+	if m.confirmationMode && m.pendingConfirmation != nil {
+		content.WriteString(m.renderConfirmationView())
+	} else {
+		for _, entry := range m.logs {
+			line := m.formatLogEntry(entry)
+			content.WriteString(line)
+			content.WriteString("\n")
+		}
 	}
 
 	// Check if we were at the bottom before updating
@@ -48,7 +53,7 @@ func (m *Model) updateViewportContent() {
 
 	// Only auto-scroll to bottom if we were already at the bottom
 	// This allows users to scroll up and read history
-	if atBottom || m.thinking {
+	if atBottom || m.thinking || m.confirmationMode {
 		m.viewport.GotoBottom()
 	}
 }
@@ -132,6 +137,11 @@ func (m Model) renderInputArea() string {
 
 // renderFooter renders the footer with model info/status on left and shortcuts on right.
 func (m Model) renderFooter() string {
+	// Special footer for confirmation mode
+	if m.confirmationMode {
+		return m.renderConfirmationFooter()
+	}
+
 	var left string
 	var right string
 
@@ -218,4 +228,90 @@ func (m Model) renderToolUsage() string {
 // lipglossWidth calculates the width of a styled string.
 func lipglossWidth(s string) int {
 	return lipgloss.Width(s)
+}
+
+// renderConfirmationView renders the file write confirmation dialog with colored diff.
+func (m Model) renderConfirmationView() string {
+	c := m.pendingConfirmation
+	if c == nil {
+		return ""
+	}
+
+	var sb strings.Builder
+
+	// Header
+	sb.WriteString("\n")
+	sb.WriteString(ConfirmHeaderStyle.Render("  File Write Confirmation"))
+	sb.WriteString("\n\n")
+
+	// File path
+	if c.IsNewFile {
+		sb.WriteString(ConfirmPathStyle.Render(fmt.Sprintf("  Creating: %s", c.FilePath)))
+	} else {
+		sb.WriteString(ConfirmPathStyle.Render(fmt.Sprintf("  Modifying: %s", c.FilePath)))
+	}
+	sb.WriteString("\n\n")
+
+	// Colored diff
+	sb.WriteString(m.renderColoredDiff(c.Diff))
+	sb.WriteString("\n")
+
+	return sb.String()
+}
+
+// renderColoredDiff applies syntax highlighting to a unified diff.
+func (m Model) renderColoredDiff(diff string) string {
+	if diff == "" {
+		return DiffContextStyle.Render("  (no changes)")
+	}
+
+	var sb strings.Builder
+	lines := strings.Split(diff, "\n")
+
+	for _, line := range lines {
+		var styledLine string
+
+		switch {
+		case strings.HasPrefix(line, "+++") || strings.HasPrefix(line, "---"):
+			// File headers (yellow/bold)
+			styledLine = DiffHeaderStyle.Render("  " + line)
+		case strings.HasPrefix(line, "@@"):
+			// Hunk headers (blue)
+			styledLine = DiffHunkStyle.Render("  " + line)
+		case strings.HasPrefix(line, "+"):
+			// Added lines (green)
+			styledLine = DiffAddStyle.Render("  " + line)
+		case strings.HasPrefix(line, "-"):
+			// Removed lines (red)
+			styledLine = DiffRemoveStyle.Render("  " + line)
+		default:
+			// Context lines (dimmed)
+			styledLine = DiffContextStyle.Render("  " + line)
+		}
+
+		sb.WriteString(styledLine)
+		sb.WriteString("\n")
+	}
+
+	return sb.String()
+}
+
+// renderConfirmationFooter renders the footer with confirmation prompt.
+func (m Model) renderConfirmationFooter() string {
+	left := ConfirmHeaderStyle.Render("Apply changes?")
+
+	right := ShortcutKeyStyle.Render("y") + ShortcutDescStyle.Render(" approve") +
+		"    " +
+		ShortcutKeyStyle.Render("n") + ShortcutDescStyle.Render(" reject") +
+		"    " +
+		ShortcutKeyStyle.Render("pgup/pgdown") + ShortcutDescStyle.Render(" scroll")
+
+	// Calculate spacing
+	w := m.width
+	gap := w - lipglossWidth(left) - lipglossWidth(right)
+	if gap < 2 {
+		gap = 2
+	}
+
+	return FooterStyle.Width(m.width).Render(left + strings.Repeat(" ", gap) + right)
 }

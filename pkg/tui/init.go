@@ -27,6 +27,7 @@ func configureToolLimits(agent *core.Agent) {
 		"performance_test": 5,
 		"webhook_listener": 10,
 		"auth_oauth2":      10,
+		"write_file":       10, // File writes require confirmation
 		// Medium-risk tools (file system I/O)
 		"read_file":    50,
 		"list_files":   50,
@@ -89,7 +90,7 @@ func configureToolLimits(agent *core.Agent) {
 
 // registerTools adds all tools to the agent.
 // This includes codebase tools, persistence tools, and testing tools from all sprints.
-func registerTools(agent *core.Agent, zapDir, workDir string) {
+func registerTools(agent *core.Agent, zapDir, workDir string, confirmManager *tools.ConfirmationManager) {
 	// Initialize shared components
 	responseManager := tools.NewResponseManager()
 	varStore := tools.NewVariableStore(zapDir)
@@ -98,6 +99,7 @@ func registerTools(agent *core.Agent, zapDir, workDir string) {
 	httpTool := tools.NewHTTPTool(responseManager, varStore)
 	agent.RegisterTool(httpTool)
 	agent.RegisterTool(tools.NewReadFileTool(workDir))
+	agent.RegisterTool(tools.NewWriteFileTool(workDir, confirmManager))
 	agent.RegisterTool(tools.NewListFilesTool(workDir))
 	agent.RegisterTool(tools.NewSearchCodeTool(workDir))
 
@@ -256,23 +258,28 @@ func InitialModel() Model {
 	// Configure per-tool call limits before registering tools
 	configureToolLimits(agent)
 
-	registerTools(agent, zapDir, workDir)
+	// Create confirmation manager for file write approvals (shared between tool and TUI)
+	confirmManager := tools.NewConfirmationManager()
+
+	registerTools(agent, zapDir, workDir, confirmManager)
 
 	return Model{
-		textinput:       newTextInput(),
-		spinner:         newSpinner(),
-		logs:            []logEntry{},
-		thinking:        false,
-		agent:           agent,
-		ready:           false,
-		renderer:        newGlamourRenderer(),
-		inputHistory:    []string{},
-		historyIdx:      -1,
-		savedInput:      "",
-		status:          "idle",
-		currentTool:     "",
-		streamingBuffer: "",
-		modelName:       modelName,
+		textinput:        newTextInput(),
+		spinner:          newSpinner(),
+		logs:             []logEntry{},
+		thinking:         false,
+		agent:            agent,
+		ready:            false,
+		renderer:         newGlamourRenderer(),
+		inputHistory:     []string{},
+		historyIdx:       -1,
+		savedInput:       "",
+		status:           "idle",
+		currentTool:      "",
+		streamingBuffer:  "",
+		modelName:        modelName,
+		confirmManager:   confirmManager,
+		confirmationMode: false,
 	}
 }
 

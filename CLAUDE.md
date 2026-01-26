@@ -35,8 +35,8 @@ go build -o zap.exe ./cmd/zap
 **Agent (pkg/core/agent.go)**: Implements ReAct (Reason+Act) loop with event system:
 - `ProcessMessage(input)` - Blocking, returns final answer
 - `ProcessMessageWithEvents(input, callback)` - Emits events for real-time UI updates
-- Events: `thinking`, `tool_call`, `observation`, `answer`, `error`, `streaming`
-- Max 5 iterations to prevent infinite loops
+- Events: `thinking`, `tool_call`, `observation`, `answer`, `error`, `streaming`, `confirmation_required`
+- Per-tool call limits to prevent runaway execution
 - Enhanced system prompt teaches:
   - Natural language to HTTP request conversion
   - Error diagnosis workflow (analyze → search → read → diagnose)
@@ -77,6 +77,12 @@ type Tool interface {
 - `ctrl+u` - Clear input line
 - `ctrl+y` - Copy last response to clipboard
 - `ctrl+c` / `esc` - Quit
+
+**File Write Confirmation Mode** (shown when agent wants to modify files):
+- `y` / `Y` - Approve file change
+- `n` / `N` - Reject file change
+- `pgup` / `pgdown` - Scroll diff
+- `esc` - Reject and continue
 
 ### Configuration
 
@@ -160,6 +166,8 @@ User Input → TUI captures Enter
 | `pkg/llm/ollama.go` | Ollama Cloud client with Bearer auth + streaming |
 | `pkg/core/tools/http.go` | HTTP request tool + status code meanings/hints + variable substitution |
 | `pkg/core/tools/file.go` | `read_file` and `list_files` tools |
+| `pkg/core/tools/write.go` | `write_file` tool with human-in-the-loop confirmation |
+| `pkg/core/tools/confirm.go` | ConfirmationManager for file write approval flow |
 | `pkg/core/tools/search.go` | `search_code` tool (ripgrep with native fallback) |
 | `pkg/core/tools/persistence.go` | Save/load requests, environment management |
 | `pkg/core/tools/assert.go` | Response validation tool (status, headers, body, timing) |
@@ -219,6 +227,7 @@ User Input → TUI captures Enter
 | Tool | Description |
 |------|-------------|
 | `read_file` | Read file contents (100KB limit, security bounded) |
+| `write_file` | Write/modify files with human-in-the-loop confirmation (shows diff, requires y/n approval) |
 | `list_files` | List files with glob patterns (`**/*.go`, recursive) |
 | `search_code` | Search patterns in codebase (ripgrep with native fallback) |
 
@@ -265,6 +274,7 @@ User Input → TUI captures Enter
 25. ✓ **Load testing** (concurrent users, latency percentiles, throughput)
 26. ✓ **Webhook capture** (temporary HTTP server for callbacks)
 27. ✓ **OAuth2 authentication** (client_credentials, password flows)
+28. ✓ **File writing with confirmation** (colored diff, y/n approval before changes)
 
 **Sprint 1 Completed Features**:
 - ✓ Response assertions (status, headers, body, JSON path, timing)

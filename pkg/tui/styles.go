@@ -171,3 +171,52 @@ var (
 	TotalUsageStyle = lipgloss.NewStyle().
 			Foreground(AccentColor)
 )
+
+// Diff colors for file write confirmation
+var (
+	DiffAddColor    = lipgloss.Color("#73daca") // Green - added lines
+	DiffRemoveColor = lipgloss.Color("#f7768e") // Red - removed lines
+	DiffHunkColor   = lipgloss.Color("#7aa2f7") // Blue - hunk headers @@
+	DiffHeaderColor = lipgloss.Color("#e0af68") // Yellow - file headers ---/+++
+)
+
+// Diff styles
+var (
+	DiffAddStyle = lipgloss.NewStyle().
+			Foreground(DiffAddColor)
+
+	DiffRemoveStyle = lipgloss.NewStyle().
+			Foreground(DiffRemoveColor)
+
+	DiffHunkStyle = lipgloss.NewStyle().
+			Foreground(DiffHunkColor)
+
+	DiffHeaderStyle = lipgloss.NewStyle().
+			Foreground(DiffHeaderColor).
+			Bold(true)
+
+	DiffContextStyle = lipgloss.NewStyle().
+				Foreground(DimColor)
+)
+
+// Confirmation dialog styles
+var (
+	ConfirmHeaderStyle = lipgloss.NewStyle().
+				Foreground(WarningColor).
+				Bold(true)
+
+	ConfirmPathStyle = lipgloss.NewStyle().
+				Foreground(AccentColor)
+
+	ConfirmFooterStyle = lipgloss.NewStyle().
+				Background(FooterBg).
+				Padding(0, 1)
+
+	ConfirmApproveStyle = lipgloss.NewStyle().
+				Foreground(SuccessColor).
+				Bold(true)
+
+	ConfirmRejectStyle = lipgloss.NewStyle().
+				Foreground(ErrorColor).
+				Bold(true)
+)

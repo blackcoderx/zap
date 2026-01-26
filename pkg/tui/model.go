@@ -4,6 +4,7 @@ import (
 	"sync"
 
 	"github.com/blackcoderx/zap/pkg/core"
+	"github.com/blackcoderx/zap/pkg/core/tools"
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
@@ -57,6 +58,11 @@ type Model struct {
 	lastToolName   string             // Last tool that was called
 	lastToolCount  int                // Last tool's current count
 	lastToolLimit  int                // Last tool's limit
+
+	// Confirmation state for file write approval
+	confirmationMode    bool                      // True when awaiting user confirmation
+	pendingConfirmation *core.FileConfirmation    // Details of the pending file change
+	confirmManager      *tools.ConfirmationManager // Shared confirmation manager
 }
 
 // agentEventMsg wraps an agent event for the TUI

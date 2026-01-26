@@ -176,6 +176,12 @@ func (m Model) handleAgentEvent(msg agentEventMsg) Model {
 				}
 			}
 		}
+
+	case "confirmation_required":
+		if msg.event.FileConfirmation != nil {
+			m.confirmationMode = true
+			m.pendingConfirmation = msg.event.FileConfirmation
+		}
 	}
 
 	m.updateViewportContent()

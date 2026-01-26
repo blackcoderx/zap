@@ -21,9 +21,17 @@ type Tool interface {
 
 // AgentEvent represents a state change during agent processing
 type AgentEvent struct {
-	Type       string // "thinking", "tool_call", "observation", "answer", "error", "streaming", "tool_usage"
-	Content    string
-	ToolUsage  *ToolUsageEvent // Present only for "tool_usage" events
+	Type             string // "thinking", "tool_call", "observation", "answer", "error", "streaming", "tool_usage", "confirmation_required"
+	Content          string
+	ToolUsage        *ToolUsageEvent  // Present only for "tool_usage" events
+	FileConfirmation *FileConfirmation // Present only for "confirmation_required" events
+}
+
+// FileConfirmation contains information for file write confirmation prompts.
+type FileConfirmation struct {
+	FilePath  string // Path to the file being modified
+	IsNewFile bool   // True if creating a new file
+	Diff      string // Unified diff of the changes
 }
 
 // ToolUsageEvent contains tool usage statistics for display
@@ -38,6 +46,13 @@ type ToolUsageEvent struct {
 
 // EventCallback is called when the agent emits an event
 type EventCallback func(AgentEvent)
+
+// ConfirmableTool is a tool that requires user confirmation before executing.
+// Tools implementing this interface can emit events back to the TUI.
+type ConfirmableTool interface {
+	Tool
+	SetEventCallback(callback EventCallback)
+}
 
 // Agent represents the ZAP AI agent.
 type Agent struct {
@@ -355,6 +370,11 @@ func (a *Agent) ProcessMessageWithEvents(input string, callback EventCallback) (
 			// Increment counters before execution
 			a.toolCounts[toolName]++
 			a.totalCalls++
+
+			// If tool implements ConfirmableTool, set the callback so it can emit events
+			if confirmable, ok := tool.(ConfirmableTool); ok {
+				confirmable.SetEventCallback(callback)
+			}
 
 			// Execute tool
 			observation, err := tool.Execute(toolArgs)

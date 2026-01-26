@@ -4,6 +4,7 @@ go 1.25.3
 
 require (
 	github.com/atotto/clipboard v0.1.4
+	github.com/aymanbagabas/go-udiff v0.3.1
 	github.com/charmbracelet/bubbles v0.20.0
 	github.com/charmbracelet/bubbletea v1.3.6
 	github.com/charmbracelet/glamour v0.8.0
