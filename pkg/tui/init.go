@@ -255,6 +255,14 @@ func InitialModel() Model {
 	client := newLLMClient()
 	agent := core.NewAgent(client)
 
+	// Set framework from config for context-aware assistance
+	framework := viper.GetString("framework")
+	if framework == "" {
+		// Fallback: read directly from config file (for first-run scenarios)
+		framework = core.GetConfigFramework()
+	}
+	agent.SetFramework(framework)
+
 	// Configure per-tool call limits before registering tools
 	configureToolLimits(agent)
 

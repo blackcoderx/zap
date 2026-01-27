@@ -87,13 +87,46 @@ type Tool interface {
 ### Configuration
 
 On first run, creates `.zap/` folder containing:
-- `config.json` - Ollama URL, model settings, tool limits
+- `config.json` - Ollama URL, model settings, tool limits, framework
 - `history.jsonl` - Conversation log
 - `memory.json` - Agent memory
 - `requests/` - Saved API requests (YAML files)
 - `environments/` - Environment configs (dev.yaml, prod.yaml, etc.)
 
 Environment: `OLLAMA_API_KEY` loaded from `.env` file.
+
+#### Framework Configuration
+
+ZAP supports framework-aware assistance. The agent provides framework-specific hints for searching code and diagnosing errors.
+
+**First-time setup**: If no framework is specified via flag, ZAP prompts you to select one:
+```bash
+# With flag (no prompt)
+./zap.exe --framework gin
+
+# Without flag (interactive prompt)
+./zap.exe
+# Select your API framework:
+# 1. gin
+# 2. echo
+# ...
+```
+
+**Update existing config**:
+```bash
+./zap.exe --framework fastapi
+# Updated framework to: fastapi
+```
+
+**Supported frameworks**:
+- **Go**: gin, echo, chi, fiber
+- **Python**: fastapi, flask, django
+- **Node.js**: express, nestjs, hono
+- **Java**: spring
+- **PHP**: laravel
+- **Ruby**: rails
+- **Rust**: actix, axum
+- **Other**: for custom/unlisted frameworks
 
 #### Tool Limits Configuration
 
@@ -309,6 +342,10 @@ ZAP supports both interactive and non-interactive modes:
 ```bash
 # Interactive mode (default)
 ./zap.exe
+
+# First-time setup with framework
+./zap.exe --framework gin
+./zap.exe -f fastapi
 
 # Execute a saved request with environment
 ./zap.exe --request get-users --env prod

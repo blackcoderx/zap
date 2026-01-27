@@ -68,6 +68,9 @@ type Agent struct {
 	defaultLimit int            // fallback limit for tools without specific limit
 	totalLimit   int            // safety cap on total tool calls per session
 	totalCalls   int            // current total tool calls in session
+
+	// User's API framework (gin, fastapi, express, etc.)
+	framework string
 }
 
 // NewAgent creates a new ZAP agent
@@ -123,6 +126,16 @@ func (a *Agent) SetDefaultLimit(limit int) {
 // SetTotalLimit sets the safety cap on total tool calls per session
 func (a *Agent) SetTotalLimit(limit int) {
 	a.totalLimit = limit
+}
+
+// SetFramework sets the user's API framework for context-aware assistance
+func (a *Agent) SetFramework(framework string) {
+	a.framework = framework
+}
+
+// GetFramework returns the configured API framework
+func (a *Agent) GetFramework() string {
+	return a.framework
 }
 
 // ResetToolCounts resets all tool call counters (called at start of each message)
@@ -497,13 +510,137 @@ func (a *Agent) buildCommonErrorSection() string {
 }
 
 func (a *Agent) buildFrameworkHintsSection() string {
-	return `## FRAMEWORK HINTS
+	var sb strings.Builder
+
+	// If user has configured a framework, provide specific guidance
+	if a.framework != "" && a.framework != "other" {
+		sb.WriteString(fmt.Sprintf("## USER'S FRAMEWORK: %s\n", strings.ToUpper(a.framework)))
+		sb.WriteString("The user is building their API with this framework. Prioritize searching for patterns specific to it.\n\n")
+
+		// Framework-specific hints
+		switch a.framework {
+		case "gin":
+			sb.WriteString(`**Gin (Go) Patterns:**
+- Routes: r.GET("/path", handler), r.POST("/path", handler), router.Group("/api")
+- Context: c.JSON(200, data), c.BindJSON(&obj), c.Param("id"), c.Query("key")
+- Errors: c.AbortWithStatusJSON(code, gin.H{"error": msg})
+- Middleware: r.Use(middleware), c.Next(), c.Abort()
+- Models: Look for struct tags like json:"field" binding:"required"
+`)
+		case "echo":
+			sb.WriteString(`**Echo (Go) Patterns:**
+- Routes: e.GET("/path", handler), e.POST("/path", handler), e.Group("/api")
+- Context: c.JSON(200, data), c.Bind(&obj), c.Param("id"), c.QueryParam("key")
+- Errors: echo.NewHTTPError(code, "message")
+- Middleware: e.Use(middleware), e.Pre(middleware)
+`)
+		case "chi":
+			sb.WriteString(`**Chi (Go) Patterns:**
+- Routes: r.Get("/path", handler), r.Post("/path", handler), r.Route("/api", fn)
+- Context: chi.URLParam(r, "id"), render.JSON(w, r, data)
+- Middleware: r.Use(middleware), r.With(middleware)
+`)
+		case "fiber":
+			sb.WriteString(`**Fiber (Go) Patterns:**
+- Routes: app.Get("/path", handler), app.Post("/path", handler), app.Group("/api")
+- Context: c.JSON(data), c.BodyParser(&obj), c.Params("id"), c.Query("key")
+- Errors: fiber.NewError(code, "message"), c.Status(code).JSON()
+`)
+		case "fastapi":
+			sb.WriteString(`**FastAPI (Python) Patterns:**
+- Routes: @app.get("/path"), @app.post("/path"), @router.get("/path")
+- Models: Pydantic BaseModel with Field(...) validators
+- Errors: raise HTTPException(status_code=code, detail="message")
+- Validation: 422 errors show "detail" array with field locations
+- Dependencies: Depends(), get_db, get_current_user
+`)
+		case "flask":
+			sb.WriteString(`**Flask (Python) Patterns:**
+- Routes: @app.route("/path", methods=["GET"]), @blueprint.route()
+- Request: request.json, request.args.get("key"), request.form
+- Response: jsonify(data), make_response(), abort(code)
+- Errors: @app.errorhandler(code)
+`)
+		case "django":
+			sb.WriteString(`**Django REST Framework (Python) Patterns:**
+- Views: @api_view(["GET"]), APIView class, ViewSet
+- Serializers: serializers.Serializer, ModelSerializer
+- Errors: raise ValidationError({"field": "message"})
+- Response: Response(data, status=status.HTTP_200_OK)
+`)
+		case "express":
+			sb.WriteString(`**Express (Node.js) Patterns:**
+- Routes: app.get("/path", handler), router.post("/path", handler)
+- Request: req.body, req.params.id, req.query.key
+- Response: res.json(data), res.status(code).send()
+- Errors: next(error), app.use((err, req, res, next) => {...})
+- Middleware: app.use(middleware), router.use(middleware)
+`)
+		case "nestjs":
+			sb.WriteString(`**NestJS (Node.js) Patterns:**
+- Controllers: @Controller("/path"), @Get(), @Post(), @Param("id")
+- Services: @Injectable(), constructor injection
+- DTOs: class-validator decorators (@IsString, @IsNotEmpty)
+- Errors: throw new HttpException("message", HttpStatus.BAD_REQUEST)
+- Pipes: ValidationPipe, ParseIntPipe
+`)
+		case "hono":
+			sb.WriteString(`**Hono (Node.js/Bun) Patterns:**
+- Routes: app.get("/path", handler), app.post("/path", handler)
+- Context: c.json(data), c.req.json(), c.req.param("id"), c.req.query("key")
+- Errors: c.json({error: "message"}, 400), throw new HTTPException(code)
+- Middleware: app.use(middleware)
+`)
+		case "spring":
+			sb.WriteString(`**Spring Boot (Java) Patterns:**
+- Controllers: @RestController, @GetMapping("/path"), @PostMapping("/path")
+- Request: @RequestBody, @PathVariable, @RequestParam
+- Response: ResponseEntity.ok(data), ResponseEntity.status(code).body()
+- Validation: @Valid, @NotNull, @Size, BindingResult
+- Errors: @ExceptionHandler, @ControllerAdvice
+`)
+		case "laravel":
+			sb.WriteString(`**Laravel (PHP) Patterns:**
+- Routes: Route::get("/path", [Controller::class, "method"])
+- Controllers: public function index(Request $request)
+- Request: $request->input("key"), $request->validate([...])
+- Response: response()->json($data), abort(code, "message")
+- Errors: ValidationException, Handler.php
+`)
+		case "rails":
+			sb.WriteString(`**Rails (Ruby) Patterns:**
+- Routes: get "/path", to: "controller#action", resources :items
+- Controllers: def index, params[:id], render json: data
+- Models: ActiveRecord validations, belongs_to, has_many
+- Errors: render json: {error: "message"}, status: :bad_request
+`)
+		case "actix":
+			sb.WriteString(`**Actix Web (Rust) Patterns:**
+- Routes: web::get().to(handler), web::resource("/path").route()
+- Extractors: web::Path<id>, web::Json<T>, web::Query<T>
+- Response: HttpResponse::Ok().json(data)
+- Errors: impl ResponseError for CustomError
+`)
+		case "axum":
+			sb.WriteString(`**Axum (Rust) Patterns:**
+- Routes: Router::new().route("/path", get(handler))
+- Extractors: Path<id>, Json<T>, Query<T>, State<T>
+- Response: Json(data), (StatusCode::OK, Json(data))
+- Errors: impl IntoResponse for CustomError
+`)
+		}
+		sb.WriteString("\n")
+	}
+
+	// Always include general hints for reference
+	sb.WriteString(`## FRAMEWORK HINTS (General Reference)
 - FastAPI/Python: Look for @app.get/@app.post decorators, Pydantic models, raise HTTPException
 - Express/Node: Look for app.get/app.post, router.use, next(error)
 - Go/Gin: Look for r.GET/r.POST, c.JSON, c.AbortWithError
 - Django: Look for @api_view, serializers, raise ValidationError
 
-`
+`)
+	return sb.String()
 }
 
 func (a *Agent) buildPersistenceSection() string {
