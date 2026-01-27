@@ -6,6 +6,7 @@ import (
 
 	"github.com/blackcoderx/zap/pkg/core"
 	"github.com/blackcoderx/zap/pkg/core/tools"
+	"github.com/blackcoderx/zap/pkg/core/tools/auth"
 	"github.com/blackcoderx/zap/pkg/llm"
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/textinput"
@@ -125,16 +126,16 @@ func registerTools(agent *core.Agent, zapDir, workDir string, confirmManager *to
 
 	// Register Sprint 2 tools
 	agent.RegisterTool(tools.NewSchemaValidationTool(responseManager))
-	agent.RegisterTool(tools.NewAuthBearerTool(varStore))
-	agent.RegisterTool(tools.NewAuthBasicTool(varStore))
-	agent.RegisterTool(tools.NewAuthHelperTool(responseManager, varStore))
+	agent.RegisterTool(auth.NewBearerTool(varStore))
+	agent.RegisterTool(auth.NewBasicTool(varStore))
+	agent.RegisterTool(auth.NewHelperTool(responseManager, varStore))
 	agent.RegisterTool(tools.NewTestSuiteTool(httpTool, assertTool, extractTool, responseManager, varStore, zapDir))
 	agent.RegisterTool(tools.NewCompareResponsesTool(responseManager, zapDir))
 
 	// Register Sprint 3 tools (MVP)
 	agent.RegisterTool(tools.NewPerformanceTool(httpTool, varStore))
 	agent.RegisterTool(tools.NewWebhookListenerTool(varStore))
-	agent.RegisterTool(tools.NewAuthOAuth2Tool(varStore))
+	agent.RegisterTool(auth.NewOAuth2Tool(varStore))
 
 	// Register memory tool
 	agent.RegisterTool(tools.NewMemoryTool(memStore))
