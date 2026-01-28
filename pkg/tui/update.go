@@ -172,6 +172,10 @@ func (m Model) handleAgentEvent(msg agentEventMsg) Model {
 	case "tool_call":
 		// Clear streaming when tool is called
 		m.streamingBuffer = ""
+		// Remove the streaming log entry (which contains the raw "ACTION: ..." text)
+		if len(m.logs) > 0 && m.logs[len(m.logs)-1].Type == "streaming" {
+			m.logs = m.logs[:len(m.logs)-1]
+		}
 		m.logs = append(m.logs, logEntry{
 			Type:     "tool",
 			Content:  msg.event.Content,
