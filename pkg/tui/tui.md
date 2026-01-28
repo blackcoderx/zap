@@ -171,7 +171,7 @@ View() [view.go]
 | Key | Action |
 |-----|--------|
 | Enter | Send message |
-| ↑/↓ | Navigate input history |
+| Shift+↑/↓ | Navigate input history |
 | PgUp/PgDown | Scroll viewport |
 | Ctrl+L | Clear screen |
 | Ctrl+U | Clear input |

@@ -36,16 +36,16 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (Model, tea.Cmd) {
 	case "ctrl+u":
 		return m.handleClearInput()
 
-	case "up":
+	case "shift+up":
 		return m.handleHistoryUp()
 
-	case "down":
+	case "shift+down":
 		return m.handleHistoryDown()
 
 	case "enter":
 		return m.handleEnter()
 
-	case "pgup", "pgdown", "home", "end":
+	case "up", "down", "pgup", "pgdown", "home", "end":
 		return m.handleViewportScroll(msg)
 
 	default:

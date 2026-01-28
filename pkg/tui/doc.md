@@ -7,7 +7,7 @@ The `tui` package provides the terminal user interface for the ZAP API debugging
 This package implements a minimal, Claude Code-inspired terminal interface with:
 
 - **Scrollable viewport** for conversation history (PgUp/PgDown, mouse wheel)
-- **Text input** with command history navigation (↑/↓ arrows)
+- **Text input** with command history navigation (Shift+↑/↓)
 - **Real-time streaming** of LLM responses as they arrive
 - **Tool call visualization** with usage statistics
 - **File write confirmation** with colored diffs
@@ -46,7 +46,7 @@ Visual styling with Lipgloss:
 ### Keys (`keys.go`)
 Keyboard shortcut definitions:
 - Enter: Send message
-- ↑/↓: Navigate input history
+- Shift+↑/↓: Navigate input history
 - PgUp/PgDown: Scroll viewport
 - Ctrl+L: Clear screen
 - Ctrl+U: Clear input line
@@ -65,7 +65,7 @@ Initialization and setup:
 | Key | Action |
 |-----|--------|
 | `Enter` | Send message |
-| `↑` / `↓` | Navigate input history |
+| `Shift+↑` / `Shift+↓` | Navigate input history |
 | `PgUp` / `PgDown` | Scroll viewport |
 | `Ctrl+L` | Clear screen |
 | `Ctrl+U` | Clear input line |

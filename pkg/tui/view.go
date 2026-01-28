@@ -230,7 +230,7 @@ func (m Model) renderFooter() string {
 	if m.thinking {
 		parts = append(parts, ShortcutKeyStyle.Render("esc")+ShortcutDescStyle.Render(" interrupt"))
 	} else {
-		parts = append(parts, ShortcutKeyStyle.Render("↑↓")+ShortcutDescStyle.Render(" history"))
+		parts = append(parts, ShortcutKeyStyle.Render("Shift + ↑↓")+ShortcutDescStyle.Render(" history"))
 	}
 	parts = append(parts, ShortcutKeyStyle.Render("ctrl+l")+ShortcutDescStyle.Render(" clear"))
 	parts = append(parts, ShortcutKeyStyle.Render("ctrl+y")+ShortcutDescStyle.Render(" copy"))

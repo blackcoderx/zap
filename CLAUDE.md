@@ -59,7 +59,7 @@ type Tool interface {
 - `glamour` - Markdown rendering for responses
 - Streaming display (text appears as it arrives)
 - Status line showing current state (thinking/streaming/executing tool)
-- Input history navigation (↑/↓ arrows)
+- Input history navigation (Shift+↑/↓)
 
 **Styling (pkg/tui/styles.go)**: Minimal 7-color palette with log prefixes:
 - `> ` user input
@@ -71,7 +71,7 @@ type Tool interface {
 
 **Keyboard Shortcuts**:
 - `enter` - Send message
-- `↑` / `↓` - Navigate input history
+- `shift+↑` / `shift+↓` - Navigate input history
 - `pgup` / `pgdown` - Scroll viewport
 - `ctrl+l` - Clear screen
 - `ctrl+u` - Clear input line
