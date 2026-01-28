@@ -1,13 +1,12 @@
 package core
 
 import (
-	"bufio"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
-	"strconv"
-	"strings"
+
+	"github.com/charmbracelet/huh"
 )
 
 const ZapFolderName = ".zap"
@@ -31,22 +30,180 @@ type Config struct {
 
 // SupportedFrameworks lists frameworks that ZAP recognizes
 var SupportedFrameworks = []string{
-	"gin",       // Go - Gin
-	"echo",      // Go - Echo
-	"chi",       // Go - Chi
-	"fiber",     // Go - Fiber
-	"fastapi",   // Python - FastAPI
-	"flask",     // Python - Flask
-	"django",    // Python - Django REST Framework
-	"express",   // Node.js - Express
-	"nestjs",    // Node.js - NestJS
-	"hono",      // Node.js/Bun - Hono
-	"spring",    // Java - Spring Boot
-	"laravel",   // PHP - Laravel
-	"rails",     // Ruby - Rails
-	"actix",     // Rust - Actix Web
-	"axum",      // Rust - Axum
-	"other",     // Other/custom framework
+	"gin",     // Go - Gin
+	"echo",    // Go - Echo
+	"chi",     // Go - Chi
+	"fiber",   // Go - Fiber
+	"fastapi", // Python - FastAPI
+	"flask",   // Python - Flask
+	"django",  // Python - Django REST Framework
+	"express", // Node.js - Express
+	"nestjs",  // Node.js - NestJS
+	"hono",    // Node.js/Bun - Hono
+	"spring",  // Java - Spring Boot
+	"laravel", // PHP - Laravel
+	"rails",   // Ruby - Rails
+	"actix",   // Rust - Actix Web
+	"axum",    // Rust - Axum
+	"other",   // Other/custom framework
+}
+
+// SetupResult holds the collected values from the first-run setup wizard.
+type SetupResult struct {
+	Framework string
+	OllamaURL string
+	Model     string
+	APIKey    string
+}
+
+// frameworkGroup organizes frameworks by language for the setup wizard.
+type frameworkGroup struct {
+	Language   string
+	Frameworks []string
+}
+
+// frameworkGroups lists frameworks grouped by language for display in the setup wizard select.
+var frameworkGroups = []frameworkGroup{
+	{Language: "Go", Frameworks: []string{"gin", "echo", "chi", "fiber"}},
+	{Language: "Python", Frameworks: []string{"fastapi", "flask", "django"}},
+	{Language: "Node.js", Frameworks: []string{"express", "nestjs", "hono"}},
+	{Language: "Java", Frameworks: []string{"spring"}},
+	{Language: "PHP", Frameworks: []string{"laravel"}},
+	{Language: "Ruby", Frameworks: []string{"rails"}},
+	{Language: "Rust", Frameworks: []string{"actix", "axum"}},
+	{Language: "Other", Frameworks: []string{"other"}},
+}
+
+// buildFrameworkOptions creates huh.Option entries for all supported frameworks,
+// labeled by language (e.g., "gin (Go)").
+func buildFrameworkOptions() []huh.Option[string] {
+	var options []huh.Option[string]
+	for _, group := range frameworkGroups {
+		for _, fw := range group.Frameworks {
+			label := fmt.Sprintf("%s (%s)", fw, group.Language)
+			if fw == "other" {
+				label = "other (custom/unlisted)"
+			}
+			options = append(options, huh.NewOption(label, fw))
+		}
+	}
+	return options
+}
+
+// runSetupWizard displays an interactive setup wizard on first run using the huh library.
+// If frameworkFlag is non-empty, the framework selection step is skipped.
+func runSetupWizard(frameworkFlag string) (*SetupResult, error) {
+	// Use separate local variables for huh bindings to avoid
+	// any pre-initialized value interference with input fields
+	var (
+		selectedFramework = frameworkFlag
+		ollamaURL         string
+		modelName         string
+		apiKey            string
+	)
+
+	fmt.Println()
+	fmt.Println("  Welcome to ZAP - AI-powered API debugging assistant")
+	fmt.Println("  Let's configure your setup.")
+	fmt.Println()
+
+	// Phase 1: Collect settings
+	var configGroups []*huh.Group
+
+	// Framework selection (skip if --framework flag was provided)
+	if frameworkFlag == "" {
+		configGroups = append(configGroups,
+			huh.NewGroup(
+				huh.NewSelect[string]().
+					Title("Select your API framework").
+					Description("ZAP uses this to provide framework-specific debugging hints.").
+					Options(buildFrameworkOptions()...).
+					Value(&selectedFramework).
+					Height(10),
+			),
+		)
+	}
+
+	// Model configuration
+	configGroups = append(configGroups,
+		huh.NewGroup(
+			huh.NewInput().
+				Title("Ollama API URL").
+				Description("The URL of your Ollama-compatible API endpoint.").
+				Placeholder("https://ollama.com").
+				Value(&ollamaURL),
+			huh.NewInput().
+				Title("Model name").
+				Description("The model to use for AI assistance.").
+				Placeholder("qwen3-coder:480b-cloud").
+				Value(&modelName),
+			huh.NewInput().
+				Title("API Key").
+				Description("Your API key for authentication.").
+				Placeholder("Enter your API key...").
+				EchoMode(huh.EchoModePassword).
+				Value(&apiKey),
+		),
+	)
+
+	configForm := huh.NewForm(configGroups...).WithTheme(huh.ThemeDracula())
+	if err := configForm.Run(); err != nil {
+		return nil, fmt.Errorf("setup cancelled: %w", err)
+	}
+
+	// Build result with defaults for empty fields
+	result := &SetupResult{
+		Framework: selectedFramework,
+		OllamaURL: ollamaURL,
+		Model:     modelName,
+		APIKey:    apiKey,
+	}
+	if result.OllamaURL == "" {
+		result.OllamaURL = "https://ollama.com"
+	}
+	if result.Model == "" {
+		result.Model = "qwen3-coder:480b-cloud"
+	}
+
+	// Phase 2: Confirmation with actual entered values
+	var confirmed bool
+	confirmForm := huh.NewForm(
+		huh.NewGroup(
+			huh.NewConfirm().
+				Title("Create configuration with these settings?").
+				Description(fmt.Sprintf(
+					"Framework: %s\nAPI URL:   %s\nModel:     %s\nAPI Key:   %s",
+					result.Framework,
+					result.OllamaURL,
+					result.Model,
+					maskAPIKey(result.APIKey),
+				)).
+				Affirmative("Yes, create config").
+				Negative("No, cancel").
+				Value(&confirmed),
+		),
+	).WithTheme(huh.ThemeDracula())
+
+	if err := confirmForm.Run(); err != nil {
+		return nil, fmt.Errorf("confirmation cancelled: %w", err)
+	}
+
+	if !confirmed {
+		return nil, fmt.Errorf("setup cancelled by user")
+	}
+
+	return result, nil
+}
+
+// maskAPIKey returns a masked version of the API key for display.
+func maskAPIKey(key string) string {
+	if key == "" {
+		return "(not set)"
+	}
+	if len(key) <= 8 {
+		return "****"
+	}
+	return key[:4] + "..." + key[len(key)-4:]
 }
 
 // InitializeZapFolder creates the .zap directory and initializes default files if they don't exist.
@@ -54,15 +211,10 @@ var SupportedFrameworks = []string{
 func InitializeZapFolder(framework string) error {
 	// Check if .zap exists
 	if _, err := os.Stat(ZapFolderName); os.IsNotExist(err) {
-		fmt.Println("Initializing .zap folder for the first time...")
-
-		// Prompt for framework if not provided via flag
-		if framework == "" {
-			var err error
-			framework, err = promptFramework()
-			if err != nil {
-				return fmt.Errorf("failed to get framework selection: %w", err)
-			}
+		// Run interactive setup wizard on first run
+		setup, err := runSetupWizard(framework)
+		if err != nil {
+			return fmt.Errorf("setup failed: %w", err)
 		}
 
 		// Create .zap directory
@@ -70,8 +222,8 @@ func InitializeZapFolder(framework string) error {
 			return fmt.Errorf("failed to create .zap folder: %w", err)
 		}
 
-		// Create default config.json with framework
-		if err := createDefaultConfig(framework); err != nil {
+		// Create config.json with wizard results
+		if err := createDefaultConfig(setup); err != nil {
 			return err
 		}
 
@@ -100,7 +252,7 @@ func InitializeZapFolder(framework string) error {
 			return err
 		}
 
-		fmt.Printf("Initialized .zap folder with framework: %s\n", framework)
+		fmt.Printf("\nInitialized .zap folder with framework: %s\n", setup.Framework)
 	} else if framework != "" {
 		// Update framework in existing config if provided via flag
 		if err := updateConfigFramework(framework); err != nil {
@@ -114,35 +266,6 @@ func InitializeZapFolder(framework string) error {
 	ensureDir(filepath.Join(ZapFolderName, "environments"))
 
 	return nil
-}
-
-// promptFramework displays an interactive prompt for selecting a framework
-func promptFramework() (string, error) {
-	fmt.Println("\nSelect your API framework:")
-	fmt.Println("─────────────────────────────")
-
-	for i, fw := range SupportedFrameworks {
-		fmt.Printf("  %2d. %s\n", i+1, fw)
-	}
-
-	fmt.Println()
-	fmt.Print("Enter number (1-", len(SupportedFrameworks), "): ")
-
-	reader := bufio.NewReader(os.Stdin)
-	input, err := reader.ReadString('\n')
-	if err != nil {
-		return "", fmt.Errorf("failed to read input: %w", err)
-	}
-
-	input = strings.TrimSpace(input)
-	choice, err := strconv.Atoi(input)
-	if err != nil || choice < 1 || choice > len(SupportedFrameworks) {
-		// Default to "other" on invalid input
-		fmt.Println("Invalid selection, defaulting to 'other'")
-		return "other", nil
-	}
-
-	return SupportedFrameworks[choice-1], nil
 }
 
 // updateConfigFramework updates the framework in an existing config file
@@ -211,14 +334,14 @@ func createDefaultEnvironment() error {
 	return nil
 }
 
-// createDefaultConfig creates a default configuration file with the specified framework
-func createDefaultConfig(framework string) error {
+// createDefaultConfig creates a default configuration file with the setup wizard results.
+func createDefaultConfig(setup *SetupResult) error {
 	config := Config{
-		OllamaURL:    "https://ollama.com",
-		OllamaAPIKey: "", // To be filled by user
-		DefaultModel: "qwen3-coder:480b-cloud",
+		OllamaURL:    setup.OllamaURL,
+		OllamaAPIKey: setup.APIKey,
+		DefaultModel: setup.Model,
 		Theme:        "dark",
-		Framework:    framework,
+		Framework:    setup.Framework,
 		ToolLimits: ToolLimitsConfig{
 			DefaultLimit: 50,  // Default: 50 calls per tool
 			TotalLimit:   200, // Safety cap: 200 total calls per session
