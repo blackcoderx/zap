@@ -3,7 +3,6 @@ package core
 import (
 	"context"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/blackcoderx/zap/pkg/llm"
@@ -13,21 +12,16 @@ import (
 // It runs the think-act-observe cycle until a final answer is reached or
 // tool limits are exceeded. This is the blocking version without events.
 func (a *Agent) ProcessMessage(input string) (string, error) {
-	fmt.Fprintf(os.Stderr, "AGENT: Processing user input: %s\n", input)
-
 	// Add user message to history
-	a.history = append(a.history, llm.Message{Role: "user", Content: input})
+	a.AppendHistory(llm.Message{Role: "user", Content: input})
 
 	// Reset tool call counters for this session
 	a.ResetToolCounts()
 
 	for {
-		fmt.Fprintf(os.Stderr, "AGENT: Total tool calls: %d\n", a.totalCalls)
-
 		// Check total limit safety cap
 		if a.isTotalLimitReached() {
 			msg := fmt.Sprintf("I reached the maximum total tool calls (%d). Stopping to prevent runaway execution.", a.totalLimit)
-			fmt.Fprintf(os.Stderr, "AGENT: %s\n", msg)
 			return msg, nil
 		}
 
@@ -40,23 +34,18 @@ func (a *Agent) ProcessMessage(input string) (string, error) {
 		// Get LLM response
 		response, err := a.llmClient.Chat(messages)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "AGENT: Chat error: %v\n", err)
 			return "", fmt.Errorf("agent chat error: %w", err)
 		}
 
-		fmt.Fprintf(os.Stderr, "AGENT: LLM Response: [%s]\n", response)
-
 		if response == "" {
-			fmt.Fprintf(os.Stderr, "AGENT: Empty response from LLM\n")
 			return "I received an empty response from the AI. This can happen if the model is overloaded or the request is blocked.", nil
 		}
 
 		// Parse response for thoughts and tool calls
 		_, toolName, toolArgs, finalAnswer := a.parseResponse(response)
-		fmt.Fprintf(os.Stderr, "AGENT: Parsed -> toolName: %s, finalAnswer: %s\n", toolName, finalAnswer)
 
 		if finalAnswer != "" && toolName == "" {
-			a.history = append(a.history, llm.Message{Role: "assistant", Content: response})
+			a.AppendHistory(llm.Message{Role: "assistant", Content: response})
 			return finalAnswer, nil
 		}
 
@@ -66,9 +55,10 @@ func (a *Agent) ProcessMessage(input string) (string, error) {
 			a.toolsMu.RUnlock()
 			if !ok {
 				observation := fmt.Sprintf("Error: Tool '%s' not found.", toolName)
-				fmt.Fprintf(os.Stderr, "AGENT: %s\n", observation)
-				a.history = append(a.history, llm.Message{Role: "assistant", Content: response})
-				a.history = append(a.history, llm.Message{Role: "user", Content: fmt.Sprintf("Observation: %s", observation)})
+				a.AppendHistoryPair(
+					llm.Message{Role: "assistant", Content: response},
+					llm.Message{Role: "user", Content: fmt.Sprintf("Observation: %s", observation)},
+				)
 				continue
 			}
 
@@ -76,31 +66,31 @@ func (a *Agent) ProcessMessage(input string) (string, error) {
 			if a.isToolLimitReached(toolName) {
 				limit := a.getToolLimit(toolName)
 				observation := fmt.Sprintf("Tool '%s' has reached its limit (%d calls). Use other tools or provide a final answer.", toolName, limit)
-				fmt.Fprintf(os.Stderr, "AGENT: %s\n", observation)
-				a.history = append(a.history, llm.Message{Role: "assistant", Content: response})
-				a.history = append(a.history, llm.Message{Role: "user", Content: fmt.Sprintf("Observation: %s", observation)})
+				a.AppendHistoryPair(
+					llm.Message{Role: "assistant", Content: response},
+					llm.Message{Role: "user", Content: fmt.Sprintf("Observation: %s", observation)},
+				)
 				continue
 			}
 
-			// Execute tool and increment counters
-			fmt.Fprintf(os.Stderr, "AGENT: Executing tool %s with args %s\n", toolName, toolArgs)
-			a.toolCounts[toolName]++
-			a.totalCalls++
+			// Execute tool and increment counters (thread-safe)
+			a.IncrementToolCount(toolName)
 
 			observation, err := tool.Execute(toolArgs)
 			if err != nil {
 				observation = fmt.Sprintf("Error executing tool: %v", err)
 			}
-			fmt.Fprintf(os.Stderr, "AGENT: Observation: %s\n", observation)
 
 			// Add interaction to history
-			a.history = append(a.history, llm.Message{Role: "assistant", Content: response})
-			a.history = append(a.history, llm.Message{Role: "user", Content: fmt.Sprintf("Observation: %s", observation)})
+			a.AppendHistoryPair(
+				llm.Message{Role: "assistant", Content: response},
+				llm.Message{Role: "user", Content: fmt.Sprintf("Observation: %s", observation)},
+			)
 			continue
 		}
 
 		// If we get here, we have a final answer (possibly via default in parseResponse)
-		a.history = append(a.history, llm.Message{Role: "assistant", Content: response})
+		a.AppendHistory(llm.Message{Role: "assistant", Content: response})
 		return finalAnswer, nil
 	}
 }
@@ -111,7 +101,7 @@ func (a *Agent) ProcessMessage(input string) (string, error) {
 // The context can be used to cancel the agent mid-processing.
 func (a *Agent) ProcessMessageWithEvents(ctx context.Context, input string, callback EventCallback) (string, error) {
 	// Add user message to history
-	a.history = append(a.history, llm.Message{Role: "user", Content: input})
+	a.AppendHistory(llm.Message{Role: "user", Content: input})
 
 	// Track turn in memory
 	if a.memoryStore != nil {
@@ -137,8 +127,11 @@ func (a *Agent) ProcessMessageWithEvents(ctx context.Context, input string, call
 			return msg, nil
 		}
 
+		// Get current total for display
+		totalCalls, _ := a.GetTotalUsage()
+
 		// Emit thinking event
-		callback(AgentEvent{Type: "thinking", Content: fmt.Sprintf("reasoning (calls: %d)...", a.totalCalls)})
+		callback(AgentEvent{Type: "thinking", Content: fmt.Sprintf("reasoning (calls: %d)...", totalCalls)})
 
 		// Prepare system prompt with tool descriptions
 		systemPrompt := a.buildSystemPrompt()
@@ -177,7 +170,7 @@ func (a *Agent) ProcessMessageWithEvents(ctx context.Context, input string, call
 		}
 
 		if finalAnswer != "" && toolName == "" {
-			a.history = append(a.history, llm.Message{Role: "assistant", Content: response})
+			a.AppendHistory(llm.Message{Role: "assistant", Content: response})
 			callback(AgentEvent{Type: "answer", Content: finalAnswer})
 			return finalAnswer, nil
 		}
@@ -192,8 +185,10 @@ func (a *Agent) ProcessMessageWithEvents(ctx context.Context, input string, call
 				// User sees this error
 				callback(AgentEvent{Type: "error", Content: fmt.Sprintf("The agent tried to use an unknown tool '%s'.", toolName)})
 
-				a.history = append(a.history, llm.Message{Role: "assistant", Content: response})
-				a.history = append(a.history, llm.Message{Role: "user", Content: fmt.Sprintf("Observation: %s", observation)})
+				a.AppendHistoryPair(
+					llm.Message{Role: "assistant", Content: response},
+					llm.Message{Role: "user", Content: fmt.Sprintf("Observation: %s", observation)},
+				)
 				continue
 			}
 
@@ -203,17 +198,18 @@ func (a *Agent) ProcessMessageWithEvents(ctx context.Context, input string, call
 				observation := fmt.Sprintf("Tool '%s' has reached its limit (%d calls). Use other tools or provide a final answer.", toolName, limit)
 				callback(AgentEvent{Type: "error", Content: fmt.Sprintf("Tool '%s' limit reached (%d calls)", toolName, limit)})
 
-				a.history = append(a.history, llm.Message{Role: "assistant", Content: response})
-				a.history = append(a.history, llm.Message{Role: "user", Content: fmt.Sprintf("Observation: %s", observation)})
+				a.AppendHistoryPair(
+					llm.Message{Role: "assistant", Content: response},
+					llm.Message{Role: "user", Content: fmt.Sprintf("Observation: %s", observation)},
+				)
 				continue
 			}
 
 			// Emit tool call event with arguments
 			callback(AgentEvent{Type: "tool_call", Content: toolName, ToolArgs: toolArgs})
 
-			// Increment counters before execution
-			a.toolCounts[toolName]++
-			a.totalCalls++
+			// Increment counters before execution (thread-safe)
+			toolCount, toolLimit := a.IncrementToolCount(toolName)
 
 			// Track tool usage in memory
 			if a.memoryStore != nil {
@@ -236,27 +232,29 @@ func (a *Agent) ProcessMessageWithEvents(ctx context.Context, input string, call
 			callback(AgentEvent{Type: "observation", Content: observation})
 
 			// Emit tool usage event for TUI display
-			stats, totalCalls, totalLimit := a.GetToolUsageStats()
+			stats, totalCallsNow, totalLimitNow := a.GetToolUsageStats()
 			callback(AgentEvent{
 				Type: "tool_usage",
 				ToolUsage: &ToolUsageEvent{
 					ToolName:    toolName,
-					ToolCurrent: a.toolCounts[toolName],
-					ToolLimit:   a.getToolLimit(toolName),
-					TotalCalls:  totalCalls,
-					TotalLimit:  totalLimit,
+					ToolCurrent: toolCount,
+					ToolLimit:   toolLimit,
+					TotalCalls:  totalCallsNow,
+					TotalLimit:  totalLimitNow,
 					AllStats:    stats,
 				},
 			})
 
 			// Add interaction to history
-			a.history = append(a.history, llm.Message{Role: "assistant", Content: response})
-			a.history = append(a.history, llm.Message{Role: "user", Content: fmt.Sprintf("Observation: %s", observation)})
+			a.AppendHistoryPair(
+				llm.Message{Role: "assistant", Content: response},
+				llm.Message{Role: "user", Content: fmt.Sprintf("Observation: %s", observation)},
+			)
 			continue
 		}
 
 		// If we get here, we have a final answer
-		a.history = append(a.history, llm.Message{Role: "assistant", Content: response})
+		a.AppendHistory(llm.Message{Role: "assistant", Content: response})
 		callback(AgentEvent{Type: "answer", Content: finalAnswer})
 		return finalAnswer, nil
 	}
