@@ -50,33 +50,10 @@ func (t *ReadFileTool) Execute(args string) (string, error) {
 		return "", fmt.Errorf("path is required")
 	}
 
-	// Resolve path relative to work directory
-	filePath := params.Path
-	if !filepath.IsAbs(filePath) {
-		filePath = filepath.Join(t.workDir, filePath)
-	}
-
 	// Security check: ensure path is within work directory
-	absPath, err := filepath.Abs(filePath)
+	absPath, err := ValidatePathWithinWorkDir(params.Path, t.workDir)
 	if err != nil {
-		return "", fmt.Errorf("invalid path: %w", err)
-	}
-
-	absWorkDir, err := filepath.Abs(t.workDir)
-	if err != nil {
-		return "", fmt.Errorf("failed to resolve work directory: %w", err)
-	}
-
-	// Ensure work directory ends with separator for proper prefix matching
-	// This prevents bypasses like /project-evil matching /project
-	if !strings.HasSuffix(absWorkDir, string(filepath.Separator)) {
-		absWorkDir += string(filepath.Separator)
-	}
-
-	// Check if path is within work directory (or equals it)
-	if absPath != strings.TrimSuffix(absWorkDir, string(filepath.Separator)) &&
-		!strings.HasPrefix(absPath, absWorkDir) {
-		return "", fmt.Errorf("access denied: path outside project directory")
+		return "", err
 	}
 
 	// Read file
@@ -141,31 +118,10 @@ func (t *ListFilesTool) Execute(args string) (string, error) {
 		searchPath = "."
 	}
 
-	// Resolve path relative to work directory
-	if !filepath.IsAbs(searchPath) {
-		searchPath = filepath.Join(t.workDir, searchPath)
-	}
-
 	// Security check: ensure path is within work directory
-	absPath, err := filepath.Abs(searchPath)
+	absPath, err := ValidatePathWithinWorkDir(searchPath, t.workDir)
 	if err != nil {
-		return "", fmt.Errorf("invalid path: %w", err)
-	}
-
-	absWorkDir, err := filepath.Abs(t.workDir)
-	if err != nil {
-		return "", fmt.Errorf("failed to resolve work directory: %w", err)
-	}
-
-	// Ensure work directory ends with separator for proper prefix matching
-	if !strings.HasSuffix(absWorkDir, string(filepath.Separator)) {
-		absWorkDir += string(filepath.Separator)
-	}
-
-	// Check if path is within work directory (or equals it)
-	if absPath != strings.TrimSuffix(absWorkDir, string(filepath.Separator)) &&
-		!strings.HasPrefix(absPath, absWorkDir) {
-		return "", fmt.Errorf("access denied: path outside project directory")
+		return "", err
 	}
 
 	var files []string

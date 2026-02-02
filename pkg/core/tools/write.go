@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/aymanbagabas/go-udiff"
 	"github.com/blackcoderx/zap/pkg/core"
@@ -72,32 +71,10 @@ func (t *WriteFileTool) Execute(args string) (string, error) {
 		return "", fmt.Errorf("content is required")
 	}
 
-	// Resolve path relative to work directory
-	filePath := params.Path
-	if !filepath.IsAbs(filePath) {
-		filePath = filepath.Join(t.workDir, filePath)
-	}
-
 	// Security check: ensure path is within work directory
-	absPath, err := filepath.Abs(filePath)
+	absPath, err := ValidatePathWithinWorkDir(params.Path, t.workDir)
 	if err != nil {
-		return "", fmt.Errorf("invalid path: %w", err)
-	}
-
-	absWorkDir, err := filepath.Abs(t.workDir)
-	if err != nil {
-		return "", fmt.Errorf("failed to resolve work directory: %w", err)
-	}
-
-	// Ensure work directory ends with separator for proper prefix matching
-	if !strings.HasSuffix(absWorkDir, string(filepath.Separator)) {
-		absWorkDir += string(filepath.Separator)
-	}
-
-	// Check if path is within work directory (or equals it)
-	if absPath != strings.TrimSuffix(absWorkDir, string(filepath.Separator)) &&
-		!strings.HasPrefix(absPath, absWorkDir) {
-		return "", fmt.Errorf("access denied: path outside project directory")
+		return "", err
 	}
 
 	// Check file size limit (1MB for writes)

@@ -270,46 +270,203 @@ func (a *Agent) ProcessMessageWithEvents(ctx context.Context, input string, call
 // or
 //
 //	Final Answer: <response>
+//
+// This parser is robust to common LLM formatting variations.
 func (a *Agent) parseResponse(response string) (thought, toolName, toolArgs, finalAnswer string) {
-	// Look for ACTION: ToolName(...)
-	actionIdx := strings.Index(response, "ACTION:")
-	if actionIdx != -1 {
-		actionPart := response[actionIdx+7:]
-		actionPart = strings.TrimSpace(actionPart)
+	// Extract thought if present
+	thought = extractThought(response)
 
-		idxOpen := strings.Index(actionPart, "(")
-		idxClose := strings.LastIndex(actionPart, ")")
+	// Try multiple patterns for ACTION (case variations, with/without colon)
+	toolName, toolArgs = a.extractAction(response)
 
-		if idxOpen != -1 && idxClose != -1 {
-			toolName = strings.TrimSpace(actionPart[:idxOpen])
-			toolArgs = actionPart[idxOpen+1 : idxClose]
-		}
+	// Look for Final Answer: ... (case-insensitive)
+	finalAnswer = extractFinalAnswer(response)
+
+	// If we found a tool, clear any partial final answer that might be before the ACTION
+	if toolName != "" {
+		finalAnswer = ""
 	}
 
-	// Look for Final Answer: ...
-	finalIdx := strings.Index(response, "Final Answer:")
-	if finalIdx != -1 {
-		finalAnswer = strings.TrimSpace(response[finalIdx+13:])
-	}
-
-	// Heuristic: If we see a tool name but no ACTION prefix (Ollama sometimes does this)
-	if toolName == "" {
-		for name := range a.tools {
-			if strings.Contains(response, name+"(") {
-				idxOpen := strings.Index(response, name+"(")
-				idxClose := strings.LastIndex(response, ")")
-				if idxOpen != -1 && idxClose > idxOpen {
-					toolName = name
-					toolArgs = response[idxOpen+len(name)+1 : idxClose]
-				}
-			}
-		}
-	}
-
-	// Default: if no tool or final answer, just return whole response
+	// Default: if no tool or final answer, treat whole response as final answer
 	if toolName == "" && finalAnswer == "" {
 		finalAnswer = response
 	}
 
 	return
+}
+
+// extractThought extracts the thought/reasoning section from a response.
+func extractThought(response string) string {
+	// Look for "Thought:" prefix (case-insensitive)
+	lower := strings.ToLower(response)
+	thoughtIdx := strings.Index(lower, "thought:")
+	if thoughtIdx == -1 {
+		return ""
+	}
+
+	// Find where thought ends (at ACTION or Final Answer or end of response)
+	thoughtStart := thoughtIdx + 8 // len("thought:")
+	thoughtEnd := len(response)
+
+	// Check for ACTION or Final Answer after thought
+	actionIdx := strings.Index(lower[thoughtStart:], "action")
+	finalIdx := strings.Index(lower[thoughtStart:], "final answer")
+
+	if actionIdx != -1 && (finalIdx == -1 || actionIdx < finalIdx) {
+		thoughtEnd = thoughtStart + actionIdx
+	} else if finalIdx != -1 {
+		thoughtEnd = thoughtStart + finalIdx
+	}
+
+	return strings.TrimSpace(response[thoughtStart:thoughtEnd])
+}
+
+// extractAction extracts tool name and arguments from ACTION: format.
+// Handles multiple format variations that LLMs might produce.
+func (a *Agent) extractAction(response string) (toolName, toolArgs string) {
+	lower := strings.ToLower(response)
+
+	// Try different ACTION patterns
+	patterns := []string{"action:", "action :", "action"}
+	var actionIdx int = -1
+	var patternLen int
+
+	for _, pattern := range patterns {
+		idx := strings.Index(lower, pattern)
+		if idx != -1 {
+			actionIdx = idx
+			patternLen = len(pattern)
+			break
+		}
+	}
+
+	if actionIdx != -1 {
+		actionPart := response[actionIdx+patternLen:]
+		actionPart = strings.TrimSpace(actionPart)
+
+		// Find the opening parenthesis
+		idxOpen := strings.Index(actionPart, "(")
+		if idxOpen != -1 {
+			toolName = strings.TrimSpace(actionPart[:idxOpen])
+
+			// Extract JSON arguments, handling nested braces
+			toolArgs = extractJSONArgs(actionPart[idxOpen:])
+		}
+	}
+
+	// Heuristic: If we didn't find ACTION format, look for raw tool calls
+	if toolName == "" {
+		toolName, toolArgs = a.extractRawToolCall(response)
+	}
+
+	return
+}
+
+// extractJSONArgs extracts JSON arguments from a string starting with "(".
+// Properly handles nested braces and brackets.
+func extractJSONArgs(s string) string {
+	if len(s) == 0 || s[0] != '(' {
+		return ""
+	}
+
+	// Find the JSON object inside parentheses
+	depth := 0
+	inString := false
+	escaped := false
+	start := -1
+	end := -1
+
+	for i, ch := range s {
+		if escaped {
+			escaped = false
+			continue
+		}
+
+		if ch == '\\' && inString {
+			escaped = true
+			continue
+		}
+
+		if ch == '"' {
+			inString = !inString
+			continue
+		}
+
+		if inString {
+			continue
+		}
+
+		switch ch {
+		case '{', '[':
+			if depth == 0 {
+				start = i
+			}
+			depth++
+		case '}', ']':
+			depth--
+			if depth == 0 && start != -1 {
+				end = i + 1
+				return s[start:end]
+			}
+		case ')':
+			// End of arguments without finding JSON
+			if depth == 0 {
+				// Return everything between ( and )
+				return strings.TrimSpace(s[1:i])
+			}
+		}
+	}
+
+	// Fallback: find last ) and extract
+	idxClose := strings.LastIndex(s, ")")
+	if idxClose > 0 {
+		return strings.TrimSpace(s[1:idxClose])
+	}
+
+	return ""
+}
+
+// extractRawToolCall looks for tool calls without ACTION prefix.
+// This handles cases where LLMs forget the ACTION: prefix.
+func (a *Agent) extractRawToolCall(response string) (toolName, toolArgs string) {
+	a.toolsMu.RLock()
+	defer a.toolsMu.RUnlock()
+
+	for name := range a.tools {
+		// Look for tool_name( pattern
+		pattern := name + "("
+		idx := strings.Index(response, pattern)
+		if idx != -1 {
+			argsStart := idx + len(name)
+			toolArgs = extractJSONArgs(response[argsStart:])
+			if toolArgs != "" {
+				return name, toolArgs
+			}
+		}
+	}
+	return "", ""
+}
+
+// extractFinalAnswer extracts the final answer from a response.
+func extractFinalAnswer(response string) string {
+	lower := strings.ToLower(response)
+
+	// Try different patterns
+	patterns := []struct {
+		pattern string
+		length  int
+	}{
+		{"final answer:", 13},
+		{"final answer :", 14},
+		{"finalanswer:", 12},
+	}
+
+	for _, p := range patterns {
+		idx := strings.Index(lower, p.pattern)
+		if idx != -1 {
+			return strings.TrimSpace(response[idx+p.length:])
+		}
+	}
+
+	return ""
 }

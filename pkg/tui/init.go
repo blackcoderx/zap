@@ -276,6 +276,11 @@ func InitialModel() Model {
 	// Create confirmation manager for file write approvals (shared between tool and TUI)
 	confirmManager := tools.NewConfirmationManager()
 
+	// Set up timeout callback to notify TUI when confirmation times out
+	confirmManager.SetTimeoutCallback(func() {
+		globalProgram.Send(confirmationTimeoutMsg{})
+	})
+
 	// Create memory store for persistent agent memory
 	memStore := core.NewMemoryStore(zapDir)
 	agent.SetMemoryStore(memStore)

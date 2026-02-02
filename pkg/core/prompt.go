@@ -52,6 +52,11 @@ You are ZAP, an AI-powered API debugging assistant. Your purpose:
 
 You are NOT a general-purpose assistant. You focus exclusively on API testing.
 
+## CRITICAL: RESPONSE FORMAT
+To use a tool: ACTION: tool_name({"param": "value"})
+To give final answer: Final Answer: your response
+ALWAYS use valid JSON with double quotes. See OUTPUT FORMAT section for details.
+
 `
 }
 
@@ -288,12 +293,14 @@ func (a *Agent) buildMemorySection() string {
 func (a *Agent) buildToolsSection() string {
 	var sb strings.Builder
 	sb.WriteString("## AVAILABLE TOOLS\n")
+	sb.WriteString("Call tools with: ACTION: tool_name({\"param\": \"value\"})\n\n")
 	a.toolsMu.RLock()
 	for _, tool := range a.tools {
-		sb.WriteString(fmt.Sprintf("- %s: %s. Parameters: %s\n", tool.Name(), tool.Description(), tool.Parameters()))
+		sb.WriteString(fmt.Sprintf("### %s\n", tool.Name()))
+		sb.WriteString(fmt.Sprintf("Description: %s\n", tool.Description()))
+		sb.WriteString(fmt.Sprintf("Parameters: %s\n\n", tool.Parameters()))
 	}
 	a.toolsMu.RUnlock()
-	sb.WriteString("\n")
 	return sb.String()
 }
 
@@ -628,29 +635,122 @@ For running multiple related tests:
 
 // buildOutputFormatSection returns the output format instructions for the LLM.
 func (a *Agent) buildOutputFormatSection() string {
-	return `## OUTPUT FORMAT
+	return `## OUTPUT FORMAT - CRITICAL: READ THIS CAREFULLY
 
-When you need to use a tool, you MUST use this format:
-Thought: <your reasoning>
-ACTION: <tool_name>(<json_arguments>)
+You MUST follow this EXACT format for ALL responses. Incorrect formatting will cause errors.
 
-Examples:
-Thought: The user wants to test the users endpoint. I'll make a GET request.
+### WHEN USING A TOOL (Required Format):
+
+` + "```" + `
+Thought: [Your reasoning about what to do]
+ACTION: tool_name({"param": "value"})
+` + "```" + `
+
+RULES:
+1. ACTION must be on its OWN LINE
+2. Tool name comes IMMEDIATELY after "ACTION: " (no space before parenthesis)
+3. Arguments MUST be valid JSON inside parentheses
+4. Use double quotes for ALL strings in JSON (not single quotes)
+5. No trailing commas in JSON
+6. No comments inside JSON
+
+### WHEN GIVING FINAL ANSWER (Required Format):
+
+` + "```" + `
+Final Answer: [Your complete response to the user]
+` + "```" + `
+
+Use "Final Answer:" ONLY when you have completed the task and have no more tools to call.
+
+### CORRECT EXAMPLES:
+
+Example 1 - HTTP Request:
+` + "```" + `
+Thought: User wants to test the users API. I'll make a GET request.
 ACTION: http_request({"method": "GET", "url": "http://localhost:8000/api/users"})
+` + "```" + `
 
-Thought: Got a 422 error. I need to find where /api/users is defined to see the required fields.
+Example 2 - HTTP Request with headers and body:
+` + "```" + `
+Thought: I need to create a user with POST request including auth header.
+ACTION: http_request({"method": "POST", "url": "http://localhost:8000/api/users", "headers": {"Authorization": "Bearer {{token}}", "Content-Type": "application/json"}, "body": {"name": "John", "email": "john@example.com"}})
+` + "```" + `
+
+Example 3 - Search code:
+` + "```" + `
+Thought: Got a 422 error. I need to find where this endpoint is defined.
 ACTION: search_code({"pattern": "/api/users", "file_pattern": "*.py"})
+` + "```" + `
 
-Thought: Found the route in app/routes/users.py. Let me read it to see the Pydantic model.
+Example 4 - Read file:
+` + "```" + `
+Thought: Found the route file. Let me read it to understand the validation.
 ACTION: read_file({"path": "app/routes/users.py"})
+` + "```" + `
 
-When you have the final answer, use this format:
-Final Answer: <your response>
+Example 5 - Extract value from response:
+` + "```" + `
+Thought: I need to extract the user ID from the response for the next request.
+ACTION: extract_value({"json_path": "$.data.id", "save_as": "user_id"})
+` + "```" + `
+
+Example 6 - Set a variable:
+` + "```" + `
+Thought: I'll save the token for use in subsequent requests.
+ACTION: variable({"action": "set", "name": "auth_token", "value": "abc123", "scope": "session"})
+` + "```" + `
+
+Example 7 - Final answer:
+` + "```" + `
+Final Answer: The API returned 200 OK. The user was created successfully with ID 123.
+` + "```" + `
+
+### WRONG EXAMPLES (DO NOT DO THIS):
+
+WRONG - Missing quotes in JSON:
+` + "```" + `
+ACTION: http_request({method: "GET", url: "http://localhost:8000"})
+` + "```" + `
+
+WRONG - Single quotes instead of double:
+` + "```" + `
+ACTION: http_request({'method': 'GET', 'url': 'http://localhost:8000'})
+` + "```" + `
+
+WRONG - Trailing comma:
+` + "```" + `
+ACTION: http_request({"method": "GET", "url": "http://localhost:8000",})
+` + "```" + `
+
+WRONG - Space before parenthesis:
+` + "```" + `
+ACTION: http_request ({"method": "GET"})
+` + "```" + `
+
+WRONG - No ACTION keyword:
+` + "```" + `
+http_request({"method": "GET", "url": "http://localhost:8000"})
+` + "```" + `
+
+WRONG - Multiple tool calls in one response:
+` + "```" + `
+ACTION: search_code({"pattern": "test"})
+ACTION: read_file({"path": "test.py"})
+` + "```" + `
+(You must wait for observation after each tool call)
+
+### WORKFLOW REMINDER:
+1. Think about what you need to do
+2. Call ONE tool with ACTION: format
+3. Wait for the Observation (tool result)
+4. Based on observation, either:
+   - Call another tool (go to step 1)
+   - Provide Final Answer
 
 Always include in error diagnoses:
 - **File**: path/to/file.py:line_number
 - **Cause**: What's wrong
-- **Fix**: How to resolve it (with example if helpful)
+- **Fix**: How to resolve it
 
 Be concise and precise. Focus on actionable information.`
 }

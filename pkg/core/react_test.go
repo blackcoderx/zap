@@ -172,6 +172,119 @@ func TestParseResponse_EdgeCases(t *testing.T) {
 	}
 }
 
+func TestParseResponse_RobustParsing(t *testing.T) {
+	agent := newTestAgent()
+
+	// Register mock tools
+	agent.RegisterTool(&mockTool{name: "http_request"})
+	agent.RegisterTool(&mockTool{name: "search_code"})
+
+	tests := []struct {
+		name         string
+		response     string
+		wantToolName string
+		wantToolArgs string
+	}{
+		{
+			name:         "lowercase action",
+			response:     `action: http_request({"method": "GET", "url": "http://localhost"})`,
+			wantToolName: "http_request",
+			wantToolArgs: `{"method": "GET", "url": "http://localhost"}`,
+		},
+		{
+			name:         "action with space before colon",
+			response:     `ACTION : http_request({"method": "GET"})`,
+			wantToolName: "http_request",
+			wantToolArgs: `{"method": "GET"}`,
+		},
+		{
+			name:         "nested JSON in body",
+			response:     `ACTION: http_request({"method": "POST", "body": {"user": {"name": "John", "tags": ["admin", "user"]}}})`,
+			wantToolName: "http_request",
+			wantToolArgs: `{"method": "POST", "body": {"user": {"name": "John", "tags": ["admin", "user"]}}}`,
+		},
+		{
+			name:         "with thought prefix",
+			response:     "Thought: I need to make a request\nACTION: http_request({\"method\": \"GET\"})",
+			wantToolName: "http_request",
+			wantToolArgs: `{"method": "GET"}`,
+		},
+		{
+			name:         "with code block formatting",
+			response:     "```\nACTION: http_request({\"method\": \"GET\"})\n```",
+			wantToolName: "http_request",
+			wantToolArgs: `{"method": "GET"}`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, toolName, toolArgs, _ := agent.parseResponse(tt.response)
+
+			if toolName != tt.wantToolName {
+				t.Errorf("toolName = %q, want %q", toolName, tt.wantToolName)
+			}
+
+			if toolArgs != tt.wantToolArgs {
+				t.Errorf("toolArgs = %q, want %q", toolArgs, tt.wantToolArgs)
+			}
+		})
+	}
+}
+
+func TestExtractJSONArgs(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{
+			name:  "simple object",
+			input: `({"key": "value"})`,
+			want:  `{"key": "value"}`,
+		},
+		{
+			name:  "nested objects",
+			input: `({"outer": {"inner": "value"}})`,
+			want:  `{"outer": {"inner": "value"}}`,
+		},
+		{
+			name:  "with array",
+			input: `({"items": [1, 2, 3]})`,
+			want:  `{"items": [1, 2, 3]}`,
+		},
+		{
+			name:  "complex nested",
+			input: `({"data": {"users": [{"name": "John"}, {"name": "Jane"}]}})`,
+			want:  `{"data": {"users": [{"name": "John"}, {"name": "Jane"}]}}`,
+		},
+		{
+			name:  "with escaped quotes",
+			input: `({"message": "Hello \"World\""})`,
+			want:  `{"message": "Hello \"World\""}`,
+		},
+		{
+			name:  "empty object",
+			input: `({})`,
+			want:  `{}`,
+		},
+		{
+			name:  "array argument",
+			input: `(["item1", "item2"])`,
+			want:  `["item1", "item2"]`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := extractJSONArgs(tt.input)
+			if got != tt.want {
+				t.Errorf("extractJSONArgs(%q) = %q, want %q", tt.input, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestToolLimits(t *testing.T) {
 	agent := newTestAgent()
 	agent.SetToolLimit("http_request", 3)

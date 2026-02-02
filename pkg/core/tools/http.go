@@ -10,22 +10,34 @@ import (
 	"time"
 )
 
+// Default timeout for HTTP requests
+const DefaultHTTPTimeout = 30 * time.Second
+
 // HTTPTool provides HTTP request capabilities
 type HTTPTool struct {
 	client          *http.Client
 	responseManager *ResponseManager
 	varStore        *VariableStore
+	defaultTimeout  time.Duration
 }
 
-// NewHTTPTool creates a new HTTP tool
+// NewHTTPTool creates a new HTTP tool with the default 30-second timeout.
 func NewHTTPTool(responseManager *ResponseManager, varStore *VariableStore) *HTTPTool {
 	return &HTTPTool{
 		client: &http.Client{
-			Timeout: 30 * time.Second,
+			Timeout: DefaultHTTPTimeout,
 		},
 		responseManager: responseManager,
 		varStore:        varStore,
+		defaultTimeout:  DefaultHTTPTimeout,
 	}
+}
+
+// SetTimeout sets the default timeout for HTTP requests.
+// This can be overridden per-request using the timeout parameter.
+func (t *HTTPTool) SetTimeout(timeout time.Duration) {
+	t.defaultTimeout = timeout
+	t.client.Timeout = timeout
 }
 
 // HTTPRequest represents an HTTP request
@@ -34,6 +46,7 @@ type HTTPRequest struct {
 	URL     string            `json:"url"`
 	Headers map[string]string `json:"headers,omitempty"`
 	Body    interface{}       `json:"body,omitempty"`
+	Timeout int               `json:"timeout,omitempty"` // Timeout in seconds (0 = use default)
 }
 
 // HTTPResponse represents an HTTP response
@@ -57,7 +70,7 @@ func (t *HTTPTool) Description() string {
 
 // Parameters returns the tool parameter description
 func (t *HTTPTool) Parameters() string {
-	return `{"method": "GET|POST|PUT|DELETE", "url": "string", "headers": {"key": "value"}, "body": {}}`
+	return `{"method": "GET|POST|PUT|DELETE", "url": "string", "headers": {"key": "value"}, "body": {}, "timeout": 30}`
 }
 
 // Execute performs an HTTP request (implements core.Tool)
@@ -89,6 +102,22 @@ func (t *HTTPTool) Execute(args string) (string, error) {
 func (t *HTTPTool) Run(req HTTPRequest) (*HTTPResponse, error) {
 	startTime := time.Now()
 
+	// Determine timeout: use per-request timeout if specified, otherwise use default
+	timeout := t.defaultTimeout
+	if req.Timeout > 0 {
+		timeout = time.Duration(req.Timeout) * time.Second
+	}
+
+	// Create a client with the appropriate timeout for this request
+	// We create a new client only if timeout differs from default to preserve connection pooling
+	client := t.client
+	if timeout != t.defaultTimeout {
+		client = &http.Client{
+			Timeout:   timeout,
+			Transport: t.client.Transport, // Reuse transport for connection pooling
+		}
+	}
+
 	// Prepare request body
 	var bodyReader io.Reader
 	if req.Body != nil {
@@ -114,7 +143,7 @@ func (t *HTTPTool) Run(req HTTPRequest) (*HTTPResponse, error) {
 	}
 
 	// Execute request
-	httpResp, err := t.client.Do(httpReq)
+	httpResp, err := client.Do(httpReq)
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute request: %w", err)
 	}

@@ -82,6 +82,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case animTickMsg:
 		m = m.handleAnimTick()
 		cmds = append(cmds, animTick())
+
+	case confirmationTimeoutMsg:
+		// Handle confirmation timeout - exit confirmation mode and show error
+		if m.confirmationMode {
+			m.confirmationMode = false
+			m.pendingConfirmation = nil
+			m.logs = append(m.logs, logEntry{
+				Type:    "error",
+				Content: "File confirmation timed out (5 minutes). The file was not modified.",
+			})
+			m.updateViewportContent()
+		}
 	}
 
 	// Update textinput (for regular character input)

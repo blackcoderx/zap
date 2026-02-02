@@ -103,6 +103,9 @@ type agentCancelMsg struct {
 	cancel context.CancelFunc
 }
 
+// confirmationTimeoutMsg signals that a file confirmation has timed out
+type confirmationTimeoutMsg struct{}
+
 // programRef holds the program reference for sending messages from goroutines.
 // Using a struct with mutex for thread-safe access instead of a bare global variable.
 type programRef struct {

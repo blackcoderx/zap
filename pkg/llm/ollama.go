@@ -38,13 +38,17 @@ type StreamCallback func(chunk string)
 
 // OllamaClient handles communication with Ollama API
 type OllamaClient struct {
-	BaseURL    string
-	Model      string
-	APIKey     string
-	HTTPClient *http.Client
+	BaseURL         string
+	Model           string
+	APIKey          string
+	HTTPClient      *http.Client // Client with timeout for regular requests
+	StreamingClient *http.Client // Client without timeout for streaming
 }
 
-// NewOllamaClient creates a new Ollama client
+// NewOllamaClient creates a new Ollama client with proper connection pooling.
+// Two HTTP clients are created:
+//   - HTTPClient: For regular requests with a 60-second timeout
+//   - StreamingClient: For streaming requests without timeout (connections can be long-lived)
 func NewOllamaClient(baseURL, model, apiKey string) *OllamaClient {
 	return &OllamaClient{
 		BaseURL: baseURL,
@@ -52,6 +56,9 @@ func NewOllamaClient(baseURL, model, apiKey string) *OllamaClient {
 		APIKey:  apiKey,
 		HTTPClient: &http.Client{
 			Timeout: 60 * time.Second,
+		},
+		StreamingClient: &http.Client{
+			Timeout: 0, // No timeout for streaming - responses can take a while
 		},
 	}
 }
@@ -125,12 +132,8 @@ func (c *OllamaClient) ChatStream(messages []Message, callback StreamCallback) (
 		httpReq.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.APIKey))
 	}
 
-	// Use a client without timeout for streaming
-	client := &http.Client{
-		Timeout: 0, // No timeout for streaming
-	}
-
-	resp, err := client.Do(httpReq)
+	// Use the dedicated streaming client (no timeout, connection reuse)
+	resp, err := c.StreamingClient.Do(httpReq)
 	if err != nil {
 		return "", fmt.Errorf("failed to send request: %w", err)
 	}
@@ -149,6 +152,7 @@ func (c *OllamaClient) ChatStream(messages []Message, callback StreamCallback) (
 
 	// Read streaming response line by line
 	var fullContent string
+	var malformedLines int
 	scanner := bufio.NewScanner(resp.Body)
 	for scanner.Scan() {
 		line := scanner.Text()
@@ -158,7 +162,10 @@ func (c *OllamaClient) ChatStream(messages []Message, callback StreamCallback) (
 
 		var chatResp ChatResponse
 		if err := json.Unmarshal([]byte(line), &chatResp); err != nil {
-			continue // Skip malformed lines
+			// Track malformed lines for debugging but don't fail
+			// This can happen with non-JSON status messages from some servers
+			malformedLines++
+			continue
 		}
 
 		chunk := chatResp.Message.Content
@@ -175,6 +182,10 @@ func (c *OllamaClient) ChatStream(messages []Message, callback StreamCallback) (
 	}
 
 	if err := scanner.Err(); err != nil {
+		// Include malformed line count in error for debugging
+		if malformedLines > 0 {
+			return fullContent, fmt.Errorf("error reading stream (skipped %d malformed lines): %w", malformedLines, err)
+		}
 		return fullContent, fmt.Errorf("error reading stream: %w", err)
 	}
 

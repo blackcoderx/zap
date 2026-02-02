@@ -5,13 +5,18 @@ import (
 	"time"
 )
 
+// TimeoutCallback is called when a confirmation request times out.
+// This allows the TUI to be notified and exit confirmation mode.
+type TimeoutCallback func()
+
 // ConfirmationManager handles thread-safe channel-based communication
 // between tools that require user confirmation and the TUI.
 type ConfirmationManager struct {
-	mu           sync.Mutex
-	responseChan chan bool
-	pending      bool
-	timeout      time.Duration
+	mu              sync.Mutex
+	responseChan    chan bool
+	pending         bool
+	timeout         time.Duration
+	timeoutCallback TimeoutCallback
 }
 
 // NewConfirmationManager creates a new ConfirmationManager with default timeout.
@@ -23,11 +28,28 @@ func NewConfirmationManager() *ConfirmationManager {
 	}
 }
 
+// SetTimeoutCallback sets the callback to invoke when a confirmation times out.
+// This allows the TUI to exit confirmation mode on timeout.
+func (cm *ConfirmationManager) SetTimeoutCallback(callback TimeoutCallback) {
+	cm.mu.Lock()
+	defer cm.mu.Unlock()
+	cm.timeoutCallback = callback
+}
+
+// SetTimeout sets the confirmation timeout duration.
+func (cm *ConfirmationManager) SetTimeout(timeout time.Duration) {
+	cm.mu.Lock()
+	defer cm.mu.Unlock()
+	cm.timeout = timeout
+}
+
 // RequestConfirmation blocks until the user responds or timeout occurs.
 // Returns true if approved, false if rejected or timed out.
+// If a timeout callback is set, it will be called when timeout occurs.
 func (cm *ConfirmationManager) RequestConfirmation() bool {
 	cm.mu.Lock()
 	cm.pending = true
+	timeout := cm.timeout
 	// Clear any stale responses
 	select {
 	case <-cm.responseChan:
@@ -42,10 +64,15 @@ func (cm *ConfirmationManager) RequestConfirmation() bool {
 		cm.pending = false
 		cm.mu.Unlock()
 		return approved
-	case <-time.After(cm.timeout):
+	case <-time.After(timeout):
 		cm.mu.Lock()
 		cm.pending = false
+		callback := cm.timeoutCallback
 		cm.mu.Unlock()
+		// Notify TUI that timeout occurred (outside of lock to prevent deadlock)
+		if callback != nil {
+			callback()
+		}
 		return false // Timeout = reject
 	}
 }
