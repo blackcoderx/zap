@@ -33,8 +33,8 @@ type GeminiConfig struct {
 // Config represents the user's ZAP configuration
 type Config struct {
 	Provider     string           `json:"provider"` // "ollama" or "gemini"
-	OllamaConfig OllamaConfig     `json:"ollama,omitempty"`
-	GeminiConfig GeminiConfig     `json:"gemini,omitempty"`
+	OllamaConfig *OllamaConfig    `json:"ollama,omitempty"`
+	GeminiConfig *GeminiConfig    `json:"gemini,omitempty"`
 	DefaultModel string           `json:"default_model"`
 	Theme        string           `json:"theme"`
 	Framework    string           `json:"framework"` // API framework (e.g., gin, fastapi, express)
@@ -546,17 +546,19 @@ func createDefaultConfig(setup *SetupResult) error {
 		},
 	}
 
-	// Set provider-specific config
+	// Set provider-specific config (only for the selected provider)
 	if setup.Provider == "ollama" {
-		config.OllamaConfig = OllamaConfig{
+		config.OllamaConfig = &OllamaConfig{
 			Mode:   setup.OllamaMode,
 			URL:    setup.OllamaURL,
 			APIKey: setup.OllamaKey,
 		}
+		// Don't set GeminiConfig - it will be omitted from JSON
 	} else {
-		config.GeminiConfig = GeminiConfig{
+		config.GeminiConfig = &GeminiConfig{
 			APIKey: setup.GeminiKey,
 		}
+		// Don't set OllamaConfig - it will be omitted from JSON
 	}
 
 	data, err := json.MarshalIndent(config, "", "  ")

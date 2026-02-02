@@ -54,8 +54,8 @@ You are NOT a general-purpose assistant. You focus exclusively on API testing.
 
 ## CRITICAL: RESPONSE FORMAT
 To use a tool: ACTION: tool_name({"param": "value"})
-To give final answer: Final Answer: your response
-ALWAYS use valid JSON with double quotes. See OUTPUT FORMAT section for details.
+To respond to user: Just write your response directly (no prefix needed)
+ALWAYS use valid JSON with double quotes for tool calls. See OUTPUT FORMAT section for details.
 
 `
 }
@@ -293,7 +293,8 @@ func (a *Agent) buildMemorySection() string {
 func (a *Agent) buildToolsSection() string {
 	var sb strings.Builder
 	sb.WriteString("## AVAILABLE TOOLS\n")
-	sb.WriteString("Call tools with: ACTION: tool_name({\"param\": \"value\"})\n\n")
+	sb.WriteString("Call tools with: ACTION: tool_name({\"param\": \"value\"})\n")
+	sb.WriteString("Respond directly when done (no prefix needed).\n\n")
 	a.toolsMu.RLock()
 	for _, tool := range a.tools {
 		sb.WriteString(fmt.Sprintf("### %s\n", tool.Name()))
@@ -639,10 +640,9 @@ func (a *Agent) buildOutputFormatSection() string {
 
 You MUST follow this EXACT format for ALL responses. Incorrect formatting will cause errors.
 
-### WHEN USING A TOOL (Required Format):
+### WHEN USING A TOOL:
 
 ` + "```" + `
-Thought: [Your reasoning about what to do]
 ACTION: tool_name({"param": "value"})
 ` + "```" + `
 
@@ -654,55 +654,45 @@ RULES:
 5. No trailing commas in JSON
 6. No comments inside JSON
 
-### WHEN GIVING FINAL ANSWER (Required Format):
+### WHEN RESPONDING TO USER:
 
-` + "```" + `
-Final Answer: [Your complete response to the user]
-` + "```" + `
-
-Use "Final Answer:" ONLY when you have completed the task and have no more tools to call.
+Just write your response directly. No special prefix needed.
 
 ### CORRECT EXAMPLES:
 
 Example 1 - HTTP Request:
 ` + "```" + `
-Thought: User wants to test the users API. I'll make a GET request.
 ACTION: http_request({"method": "GET", "url": "http://localhost:8000/api/users"})
 ` + "```" + `
 
 Example 2 - HTTP Request with headers and body:
 ` + "```" + `
-Thought: I need to create a user with POST request including auth header.
 ACTION: http_request({"method": "POST", "url": "http://localhost:8000/api/users", "headers": {"Authorization": "Bearer {{token}}", "Content-Type": "application/json"}, "body": {"name": "John", "email": "john@example.com"}})
 ` + "```" + `
 
 Example 3 - Search code:
 ` + "```" + `
-Thought: Got a 422 error. I need to find where this endpoint is defined.
 ACTION: search_code({"pattern": "/api/users", "file_pattern": "*.py"})
 ` + "```" + `
 
 Example 4 - Read file:
 ` + "```" + `
-Thought: Found the route file. Let me read it to understand the validation.
 ACTION: read_file({"path": "app/routes/users.py"})
 ` + "```" + `
 
 Example 5 - Extract value from response:
 ` + "```" + `
-Thought: I need to extract the user ID from the response for the next request.
 ACTION: extract_value({"json_path": "$.data.id", "save_as": "user_id"})
 ` + "```" + `
 
 Example 6 - Set a variable:
 ` + "```" + `
-Thought: I'll save the token for use in subsequent requests.
 ACTION: variable({"action": "set", "name": "auth_token", "value": "abc123", "scope": "session"})
 ` + "```" + `
 
-Example 7 - Final answer:
+Example 7 - Response to user (no prefix):
 ` + "```" + `
-Final Answer: The API returned 200 OK. The user was created successfully with ID 123.
+The API returned 200 OK. The user was created successfully with ID 123.
 ` + "```" + `
 
 ### WRONG EXAMPLES (DO NOT DO THIS):
@@ -739,13 +729,12 @@ ACTION: read_file({"path": "test.py"})
 ` + "```" + `
 (You must wait for observation after each tool call)
 
-### WORKFLOW REMINDER:
-1. Think about what you need to do
-2. Call ONE tool with ACTION: format
-3. Wait for the Observation (tool result)
-4. Based on observation, either:
+### WORKFLOW:
+1. Call ONE tool with ACTION: format
+2. Wait for the Observation (tool result)
+3. Based on observation, either:
    - Call another tool (go to step 1)
-   - Provide Final Answer
+   - Respond to user directly
 
 Always include in error diagnoses:
 - **File**: path/to/file.py:line_number
