@@ -3,7 +3,7 @@
 *.dll
 *.so
 *.dylib
-zap
+
 
 # Test binary
 *.test
@@ -30,9 +30,3 @@ go.work
 Thumbs.db
 
 .agent
-
-idea-dev
-test-api
-ui
-docs
-landing-page
