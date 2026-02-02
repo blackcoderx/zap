@@ -30,3 +30,5 @@ go.work
 Thumbs.db
 
 .agent
+
+node_modules
