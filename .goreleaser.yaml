@@ -76,7 +76,7 @@ brews:
       name: homebrew-zap
       branch: main
       token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
-    folder: Formula
+    directory: Formula
     homepage: "https://github.com/blackcoderx/zap"
     description: "AI-powered API debugging that understands your codebase"
     license: "MIT"
