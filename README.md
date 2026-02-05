@@ -4,6 +4,8 @@
 
 **ZAP** is a terminal-based AI assistant that doesn't just test your APIs—it debugs them. When an endpoint returns an error, ZAP searches your actual code to find the cause and suggests fixes. Works with local LLMs (Ollama) or cloud providers (Gemini).
 
+![A picture of the TUI of ZAP](zap-interface.png)
+
 ## Installation
 
 ### Manual Installation
