@@ -6,19 +6,19 @@
 
 ## Installation
 
-### Homebrew (macOS/Linux)
+### Manual Installation
 
-```bash
-brew tap blackcoderx/zap
-brew install zap
-```
+Download the latest pre-built binary for your operating system from [Releases](https://github.com/blackcoderx/zap/releases).
 
-### Scoop (Windows)
+**Windows:**
+1. Download `zap_Windows_x86_64.zip`.
+2. Extract the archive.
+3. Add the extracted folder to your system `PATH`.
 
-```bash
-scoop bucket add blackcoderx https://github.com/blackcoderx/scoop-bucket
-scoop install zap
-```
+**macOS/Linux:**
+1. Download the `tar.gz` archive for your architecture.
+2. Extract the archive: `tar -xzf zap_...tar.gz`
+3. Move the binary to a location in your `PATH` (e.g., `/usr/local/bin`).
 
 ### From Source
 
@@ -26,9 +26,15 @@ scoop install zap
 go install github.com/blackcoderx/zap/cmd/zap@latest
 ```
 
-### Download Binary
+## Updating ZAP
 
-Download pre-built binaries from [Releases](https://github.com/blackcoderx/zap/releases).
+ZAP includes a self-update command to easily upgrade to the latest version:
+
+```bash
+zap update
+```
+
+This will check for the latest release on GitHub and update your binary in place (requires write permissions to the binary location).
 
 ## Table of Contents
 

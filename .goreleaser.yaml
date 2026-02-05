@@ -68,41 +68,4 @@ release:
 
     **Full Changelog**: https://github.com/blackcoderx/zap/compare/{{ .PreviousTag }}...{{ .Tag }}
 
-# Homebrew tap configuration
-brews:
-  - name: zap
-    repository:
-      owner: blackcoderx
-      name: homebrew-zap
-      branch: main
-      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
-    directory: Formula
-    homepage: "https://github.com/blackcoderx/zap"
-    description: "AI-powered API debugging that understands your codebase"
-    license: "MIT"
-    install: |
-      bin.install "zap"
-    test: |
-      system "#{bin}/zap", "version"
-    commit_author:
-      name: goreleaserbot
-      email: bot@goreleaser.com
-    commit_msg_template: "Brew formula update for {{ .ProjectName }} version {{ .Tag }}"
-    skip_upload: auto
 
-# Scoop bucket configuration
-scoops:
-  - name: zap
-    repository:
-      owner: blackcoderx
-      name: scoop-bucket
-      branch: main
-      token: "{{ .Env.SCOOP_BUCKET_TOKEN }}"
-    homepage: "https://github.com/blackcoderx/zap"
-    description: "AI-powered API debugging that understands your codebase"
-    license: "MIT"
-    commit_author:
-      name: goreleaserbot
-      email: bot@goreleaser.com
-    commit_msg_template: "Scoop manifest update for {{ .ProjectName }} version {{ .Tag }}"
-    skip_upload: auto
